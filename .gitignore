@@ -1,0 +1,26 @@
+# Secrets — read keys from the environment, never commit them
+.env
+.env.*
+!.env.example
+*.pem
+
+# Dependencies
+node_modules/
+.venv/
+__pycache__/
+
+# Terraform — state and locals never go in git
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+.terraform.lock.hcl
+
+# Build output
+dist/
+build/
+.next/
+
+# OS
+.DS_Store
