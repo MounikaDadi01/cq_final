@@ -46,15 +46,15 @@ strictly more useful.
 Two properties of the shape are worth stating up front, because the rest of the
 document leans on them.
 
-Front end and backend are deliberately co-located on EC2. Sandboxes are
-deliberately not — that separation is what keeps constraint 3 satisfied by
-construction rather than by discipline.
+Front end and backend run **locally**, in one process. The sandbox is the one
+piece that must be remote, because the brief forbids the agent running on your
+laptop — and that separation is exactly what keeps constraint 3 satisfied.
 
-Sandboxes living outside the VPC is an accepted trade. "Everything in the VPC"
-applies to the control plane: API, RDS, ALB, and CloudFront's path to them are
-private. Agent boxes reach S3 over the public endpoint using short-lived scoped
-credentials. The S3 gateway endpoint therefore serves the backend, not the
-agent.
+The consequence worth stating up front: **every connection in the system is
+outbound.** The backend reaches E2B and Supabase; the agent reaches Supabase and
+the model APIs. Nothing connects *in* to the machine running the backend, so there
+is no tunnel, no public endpoint, and no edge to configure. The agent and the
+backend never speak to each other; they meet in the database.
 
 ## Hydration
 
@@ -105,7 +105,7 @@ valid file immediately, which is how the third-brand test passes by
 construction.
 
 The rendered file is persisted to S3 at
-`s3://cq-work/<task-id>/rev-<n>/HYDRATION.md`, byte-identical to what was written into
+`work/<task-id>/rev-<n>/HYDRATION.md`, byte-identical to what was written into
 the box, as the run's replayable recipe. That is what makes resume a replay
 rather than a reconstruction, and it is also the audit record of exactly what a
 run was told.
@@ -228,8 +228,8 @@ the way SKILL.md already names its output.
 **The storage key is the relative path.** Nothing invents an identifier:
 
 ```
-s3://cq-brains/<kit-id>/<path within the brain>
-s3://cq-work/<task-id>/rev-<n>/<path within the project>
+brains/<kit-id>/<path within the brain>
+work/<task-id>/rev-<n>/<path within the project>
 ```
 
 So `/work/html_portrait/assets/plate.png` lands at
@@ -263,7 +263,7 @@ Inside the box, both trees land where their names say:
 ```
 /work/
   HYDRATION.md
-  brain/            an exact mirror of cq-brains/<kit-id>/
+  brain/            an exact mirror of brains/<kit-id>/
   inspirations/     only the filenames the request names
   parent/           an exact mirror of rev-<n-1>/, on an edit
   html_<slug>/      the output, mirroring what gets saved
@@ -288,9 +288,10 @@ boundary — entries keyed by `kind` and `path`, exactly as `asset_manifest.json
 describes staged input. One index format going in, the same index format coming
 out.
 
-The STS session is scoped to `s3://cq-work/<task-id>/rev-<n>/*`. One revision is
-produced by one run at a time, so the blast radius stays a single prefix while the
-path itself remains addressable by revision rather than by an opaque run id.
+Write access is scoped to `work/<task-id>/rev-<n>/` by a row-level policy rather
+than by a credential wrapper. One revision is produced by one run at a time, so
+the blast radius stays a single prefix while the path itself stays addressable by
+revision rather than by an opaque run id.
 
 ### `save_work` is the mechanism
 
@@ -322,9 +323,10 @@ one exists, and plates are saved before the tool returns them to the model,
 because the brief's own failure case is a box killed at minute nine with a billed
 image call already succeeded. Same actor, same mechanism, tighter cadence.
 
-- The backend mints an STS session scoped to `s3://cq-work/<task-id>/rev-<n>/*` via a
-  session policy with a short TTL, passed into the sandbox as environment.
-  Blast radius is exactly one prefix.
+- The backend mints a short-lived JWT carrying `run_id`, `revision_id` and
+  `brand_kit_id` claims, passed into the sandbox as environment. Row-level
+  security turns those claims into the only rows and objects the run can touch.
+  Blast radius is exactly one revision.
 - The agent writes plates, rendered PNGs, HTML projects, its own transcript,
   browser recordings, and `RESULT.json`.
 - After writing, the agent re-reads each object and compares size and digest
@@ -337,8 +339,8 @@ image call already succeeded. Same actor, same mechanism, tighter cadence.
 The backend reads S3. It never reads the box. Saving work is not publishing,
 and reading durable storage is not reaching into a sandbox.
 
-There is no terminal manifest. Completion is a state transition in RDS driven
-by the last ACK, so no single file can strand a run's output.
+There is no terminal manifest. Completion is a state transition on the run row,
+written by the agent itself, so no single file can strand a run's output.
 
 ### `RESULT.json` is a report, not a mechanism
 
@@ -356,25 +358,34 @@ The line that keeps it sharp: **the backend may read `RESULT.json` for its
 content** — to show an operator the escalations — **but never for discovery.**
 Reading durable storage is fine; depending on a file to know what exists is not.
 
-### How the sandbox reaches the API
+### The sandbox never reaches the backend
 
-The sandbox is off-AWS and the ALB is internal, so it has no private route in.
-The ACK travels the same public path a browser does:
+The backend runs locally, so nothing can connect *to* it. That is a feature
+rather than a limitation, because it means every connection in the system is
+outbound:
 
 ```
-sandbox → CloudFront (public) → VPC origin → internal ALB → EC2
+backend (local)  ──▶  E2B          create the box, write HYDRATION.md in
+agent   (E2B)    ──▶  Supabase     upload artifacts, insert rows
+backend (local)  ──▶  Supabase     read everything back, reconcile
+backend (local)  ──▶  E2B          ask whether the sandbox still exists
 ```
 
-The ALB is not called by the sandbox; it is the last hop inside the VPC, and
-CloudFront is the only public door. Authentication is a per-run bearer token
-minted at hydration and scoped to that run, so a token can only ACK artifacts
-for the run it was issued to. `/api/*` is configured with caching disabled and
-POST and PUT allowed.
+**No inbound connection to the machine running the backend, ever.** No tunnel, no
+public endpoint, nothing to expose. The agent and the backend never speak; they
+meet in the database.
 
-Writes to S3 do not take this path — those go direct to the S3 endpoint with the
-scoped STS session, which is why the bucket policy has to permit the public
-endpoint rather than requiring the VPC gateway endpoint. The gateway endpoint
-serves the backend's own S3 access.
+That also removes the artifact ACK endpoint. The agent uploads an object and
+inserts its row directly, and the *database* is what accepts or rejects — a
+row-level policy, a `NOT NULL`, a uniqueness constraint. Postgres returns the
+error text straight to the agent, so a bad save still fails loudly in words it
+can read and fix in the same run, with no endpoint of ours to keep honest.
+
+One honest regression. Independent verification used to be synchronous: an
+endpoint re-read the object and compared the digest before writing the row. Now
+the agent verifies its own upload in-run, and the backend re-verifies during
+reconciliation. Immediate feedback stays; the *independent* check moves a few
+seconds later.
 
 ### Surviving abrupt closure
 
@@ -716,80 +727,93 @@ Tool handlers return `isError: true` with composed messages rather than raw
 exceptions, so a failure arrives as something the agent can read and act on
 within the same run.
 
-## Terraform
+## Supabase
 
-One apply, full stack.
+Two things to provision, both versioned as SQL in the repo. No VPC, no subnets,
+no load balancer, no edge — there is nothing to put them in front of.
 
-Networking: VPC across two AZs; public subnets for NAT; private app subnets;
-isolated DB subnets; IGW; NAT gateway; route tables. S3 gateway endpoint;
-interface endpoints for Secrets Manager, STS, CloudWatch Logs, and — required for
-the deploy pipeline — `ssm`, `ssmmessages`, and `ec2messages`. The instance
-profile carries `AmazonSSMManagedInstanceCore`; without it Run Command has no
-targets and the pipeline fails with nothing to point at.
+**Schema.** `brand_kits` · `brand_assets` · `brand_fonts` · `requests` ·
+`request_canvases` · `revisions` · `messages` · `runs` · `artifacts` ·
+`findings`. Migrations are numbered files applied in order, which is the same
+property Terraform state gave us: a reviewer can see how the shape was reached.
 
-Compute and data: EC2 in private subnets behind an internal ALB; RDS Postgres
-in isolated subnets with credentials in Secrets Manager. No separate queue
-service — the run table is the queue.
+**Buckets.** `brains` and `work`, both private. Versioning on `work` so a
+superseded attempt's bytes survive without a version graph.
 
-Edge: CloudFront with a VPC origin to the internal ALB. Nothing publicly
-exposed.
+### Row-level security is the isolation
 
-Buckets: `cq-brains`, `cq-work` (versioned), and a bootstrapped `cq-tfstate`
-with `use_lockfile = true`. State locking is native S3; no DynamoDB table.
+This is the part that replaces IAM, and it is stronger for what is being graded
+here. Every table has RLS enabled and **denies by default** — a table with no
+policy is unreachable rather than open.
 
-IAM: EC2 instance role, the assumable per-run agent role, Terraform execution
-role.
+The backend mints a short-lived JWT for each run:
+
+```json
+{ "role": "sandbox_run", "run_id": "…", "revision_id": "…", "brand_kit_id": "bk-…" }
+```
+
+Policies turn those claims into hard limits:
+
+| Table or bucket | Policy |
+|---|---|
+| `brand_assets`, `brand_fonts` | `SELECT` only where `kit_id = jwt.brand_kit_id` |
+| `artifacts` | `INSERT` only where `revision_id = jwt.revision_id` |
+| `runs` | `UPDATE` only its own row |
+| `storage.objects` in `work` | read and write only under `<task-id>/rev-<n>/` |
+| `storage.objects` in `brains` | `SELECT` only under the run's own kit |
+| everything else | no policy, therefore no access |
+
+**The cross-tenant leak is now a database rule.** The mis-tagged
+`partner-lockup.svg` is tagged to one kit and sits in another brain's folder; an
+Emplifi run carries an Emplifi `brand_kit_id`, so the row is simply not visible to
+it. Isolation is enforced where the data lives rather than by a credential
+wrapper around it — which makes the leak test a SQL-level assertion, much harder
+to fake than a green tick.
+
+### The one key that must never leave the machine
+
+`service_role` **bypasses RLS entirely.** It stays in the backend's `.env` and is
+never placed in a sandbox environment, never in a hydration file, never in a log.
+Every guarantee on this page rests on that, so it gets its own check rather than a
+footnote.
 
 ## Keeping the agent off the backend
 
-Three guards, in descending order of how much they actually enforce:
+The backend now runs on a laptop, which makes spawning the agent beside it
+*easier*, not harder — and there is no IAM boundary left to lean on. So the guards
+have to be structural in the codebase itself:
 
-1. **No agent runtime on EC2.** The Agent SDK is not installed on the instance
-   and the API package has no dependency that executes one. A lint rule bans
-   `child_process` in that package.
-2. **A run row requires a non-null sandbox id**, enforced by a database
-   constraint. A run with no sandbox cannot reach `succeeded`, so a locally
-   executed generation has nowhere to record itself.
-3. **Least privilege on model keys.** The instance role is denied
-   `GetSecretValue` on the model-key secrets; the agent's run role holds that
-   permission and the backend brokers a short-lived session into the sandbox.
+1. **No agent runtime in the backend package.** The Agent SDK is not a dependency
+   of the app, and a lint rule bans `child_process` there. CI fails on either.
+2. **A run row requires a non-null `sandbox_id`**, by database constraint. A run
+   with no sandbox cannot reach `completed`, so a locally executed generation has
+   nowhere to record itself.
+3. **The sandbox is the only thing holding a model key at generation time.** The
+   backend passes them in and does not use them itself.
 
-An earlier draft claimed this made local generation *physically impossible*. It
-does not, and the correction matters: the backend mints the run role's session
-and therefore briefly holds credentials that can read those secrets. What guard
-three actually buys is least privilege and a CloudTrail record of every
-`AssumeRole`. Guards one and two are the ones doing enforcement work. Stating
-this accurately is cheaper than having it found.
+Guards 1 and 2 do the work. Guard 3 is a discipline, not a wall — the backend
+holds the keys in `.env` in order to pass them, so it *could* call the image API.
+Saying that plainly is cheaper than implying a boundary that is not there.
 
-## Delivery pipeline
+## How it runs
 
-Two pipelines, both GitHub Actions, both authenticating by **OIDC** — no
-long-lived AWS keys ever live in GitHub.
+```bash
+cp .env.example .env     # Supabase URL, keys, OpenAI, Anthropic, E2B
+npm install
+npm run db:push          # apply migrations
+npm run dev              # front end + API on localhost
+```
 
-**On pull request:** typecheck, lint, unit tests, and a grep of the source tree
-for tenant names that fails the build on a hit outside fixtures and tests.
+No deploy pipeline, because there is nothing to deploy to. CI still runs on every
+pull request — typecheck, lint, the full suite, the tenant-name grep — because it
+grades the code regardless of where the code runs.
 
-**App deploy**, on merge to `main`: build a container image tagged with the git
-SHA, push to ECR, then **SSM Run Command** tells the instance to pull and
-restart. SSM rather than SSH because EC2 sits in a private subnet with no public
-IP, so there is nothing to SSH to — SSM reaches it through the interface
-endpoints with no inbound rule at all. Rollback is the same command with an
-earlier SHA, since image tags are immutable.
+The **sandbox template** is the one thing that still publishes: `e2b template
+build` on changes under `sandbox/`, writing the new template id to a config row so
+a rebuild needs no code change.
 
-**Sandbox template**, on changes under `sandbox/`: `e2b template build` and
-publish, writing the new template id to Parameter Store. Runs pick it up without
-a code change or a redeploy.
-
-The internal ALB stays. CloudFront VPC origins can target an EC2 instance
-directly, which would remove a resource, but the ALB provides a health check
-that nothing else does — during an in-place restart it returns a 503 rather than
-a refused connection — and it decouples CloudFront from the instance's
-lifecycle. Unlike the queue, it is not duplicating something another component
-already handles.
-
-Observability stays thin on purpose: one CloudWatch log group, a `/health`
-endpoint for the target group, run transcripts in S3, and run state visible in
-the UI.
+A reviewer clones the repo, fills in `.env`, and runs two commands. That is a
+better answer to *"it should run"* than an AWS account they have no access to.
 
 ## Brain ingest
 
@@ -853,167 +877,137 @@ time a graph would cost.
 
 ## Functional verification
 
-Ten things that would look correct on paper and fail in practice. Each is paired
-with the check that proves it, because a claim without a check is a hope.
+Ten things that would look correct on paper and fail in practice, each paired with
+the check that proves it. Five infrastructure checks from the AWS design are gone
+with the infrastructure; four RLS checks replace them, and they matter more.
 
 | # | Failure | Check that catches it |
 |---|---|---|
-| 1 | **Fonts silently fall back.** A TTF in a directory is not used by Chromium unless installed into fontconfig or referenced by `@font-face` with a `file://` src. The render looks fine and the type is wrong. | Post-render assertion: computed `font-family` on every text node matches a family loaded from the brain. Fails the render, not a log line. |
-| 2 | **Soft-deleted bytes never expire.** Lifecycle configuration is static, so a per-run prefix rule cannot exist. | Objects tagged `deleted=true`; one static rule targets the tag. Verified by reading the bucket's lifecycle config, not by assuming. |
-| 3 | **Deploy pipeline has no targets.** SSM needs `ssm`, `ssmmessages`, `ec2messages` plus `AmazonSSMManagedInstanceCore`. | `aws ssm describe-instance-information` returns the instance before the pipeline is trusted. |
-| 4 | **Deploy recording lost.** Playwright flushes video on `context.close()`; a box killed mid-deploy loses it, and no recording means no deploy. | Context closed and the recording ACKed as an artifact *before* `finish_run`. A deploy run with no recording artifact cannot reach `completed`. |
-| 5 | **`/api/*` rejects the ACK.** Several managed cache policies block POST. | Its own cache behaviour: caching disabled, POST and PUT allowed. Proven by an ACK from outside the VPC, not from a local test. |
-| 6 | **CloudFront 502s at the ALB.** VPC origins connect through AWS-managed ENIs that the ALB security group must admit. | A request through the distribution reaching the app, before anything else is built on top. |
-| 7 | **Presigned URLs expire mid-run.** A twelve-minute run with five-minute URLs fails on a late fetch. | Expiry exceeds max run duration; the E2B sandbox timeout is set explicitly above expected duration. Verified by a deliberately slow run. |
-| 8 | **State locking silently absent.** `use_lockfile` no-ops on Terraform below 1.11. | Version pinned in `required_version`; two concurrent plans must produce a lock error. |
-| 9 | **Any repo can assume the deploy role.** An unscoped OIDC trust policy. | `sub` restricted to this repository and ref, asserted by reading the trust policy. |
-| 10 | **A tenant name reaches the source tree.** | CI greps for tenant names outside fixtures and tests and fails the build. |
-| 11 | **Input software cannot read passes quietly.** An SVG with no intrinsic size, a font filename we cannot index, a palette in Pantone — each used to produce a silent pass. | A third outcome. `unverifiable` is reported and surfaced by `unverified()`, so "nothing failed" and "nothing was checked" cannot look alike. Covered by `silent-cases.test.ts`. |
+| 1 | **Fonts silently fall back.** A TTF in a directory is not used by Chromium unless installed into fontconfig or loaded via `@font-face` with a `file://` src. The render looks fine and the type is wrong. | Post-render assertion: computed `font-family` on every text node matches a family from the brain. **Fails the render.** |
+| 2 | **The `service_role` key reaches a sandbox.** It bypasses RLS completely, so every other guarantee on this page evaporates at once. | The launch payload is scanned for it before a box is created, and the sandbox env is asserted to contain only the scoped run JWT. **Refuses to launch.** |
+| 3 | **A table ships with RLS off.** Deny-by-default only holds if it is switched on everywhere; one table without it is an open door. | Query `pg_class` for every table in the schema and assert `relrowsecurity`. A new table with no policy fails CI. |
+| 4 | **A run writes to another revision.** The claim scoping is only real if the policy actually refuses. | With a run JWT for revision A, attempt an insert and an upload for revision B and assert both are **denied**. Asserting the denial, not the permission. |
+| 5 | **A run reads another kit's assets.** This is the cross-tenant leak. | With an Emplifi run JWT, select the mis-tagged asset and assert zero rows. Then relax the policy and watch the same test fail. |
+| 6 | **Deploy recording lost.** Playwright flushes video on `context.close()`; a killed box loses it, and no recording means no deploy. | Recording uploaded and its row inserted *before* the run completes. A deploy run without one **cannot reach `completed`**. |
+| 7 | **Signed URLs expire mid-run.** A twelve-minute run with five-minute URLs fails on a late fetch. | Expiry exceeds max run duration; the E2B sandbox timeout is set explicitly above it. Proven by a deliberately slow run. |
+| 8 | **Soft-deleted objects are never removed.** Marking a row hidden does nothing to the bytes. | A `pg_cron` cleanup removes objects for rows deleted beyond the retention window, verified by running it rather than by trusting it exists. |
+| 9 | **A tenant name reaches the source tree.** | CI greps for tenant names outside fixtures and tests and fails the build. |
+| 10 | **Input software cannot read passes quietly.** An SVG with no intrinsic size, a font filename we cannot index, a palette in Pantone. | A third outcome. `unverifiable` is reported and surfaced by `unverified()`, so "nothing failed" and "nothing was checked" cannot look alike. |
 
-Checks 1 and 4 are the two that would otherwise pass review and fail a
-demonstration, which is why they carry hard failures rather than warnings.
+Checks 1, 2 and 6 carry hard failures rather than warnings. Check 2 is the one to
+read twice: RLS is the whole isolation story, and a single leaked key turns all of
+it off.
 
 ## Roadmap
 
 ### Why this order
 
-Five constraints fix the sequence. Every one of them is a real dependency, not a
-preference, which is why the stages cannot be shuffled:
+Five constraints fix the sequence, and every one is a real dependency:
 
-1. **The evaluation layer precedes what it grades.** It is already built, which is
-   why Gate 0 can be judged rather than eyeballed.
+1. **The evaluation layer precedes what it grades.** Already built, which is why
+   Gate 0 can be judged rather than eyeballed.
 2. **Nothing touches a sandbox until the skill is boring.** The brief makes this a
    gate: skip it and a later failure is indistinguishable between a database
-   problem, a skill problem, a hydration problem and a resume problem.
-3. **Infrastructure exists before the pipeline that deploys to it.** Otherwise the
-   pipeline gets built twice.
-4. **A brand exists before a run can pull one.** Ingest is not optional plumbing;
-   it is the precondition for every run and the whole of the third-brand test.
-5. **Deploy is an automatic disqualifier**, so it is scheduled as a deadline with
-   room in front of it, never as a finish.
+   problem, a skill problem and a hydration problem.
+3. **The database and its policies exist before anything writes to them.** RLS is
+   the isolation, so it cannot be retrofitted after the write paths are built.
+4. **A brand exists before a run can pull one.** Ingest is the precondition for
+   every run and the whole of the third-brand test.
+5. **Deploy is an automatic disqualifier**, so it gets room in front of it.
 
 ### Precondition — the evaluation layer *(done)*
 
 Not a stage, because it grades all of them. **144 tests, no browser, no image
-model, no AWS**: the capability envelope, brain loading, the ingest planner, the
+model, no cloud**: the capability envelope, brain loading, the ingest planner, the
 render checks, the disqualifier scanners, and every case where input resists being
-read. Each detector is shown catching a planted violation, and a third check
-outcome — `unverifiable` — exists so a check that cannot run never reads as
-success.
-
-It was built first on purpose. Gate 0's success criterion is "these checks pass
-against real output", which is only meaningful if the checks already exist.
-
----
+read. Each detector is shown catching a planted violation, and a third outcome —
+`unverifiable` — exists so a check that cannot run never reads as success.
 
 ### Everything we are using, and why
 
 | Layer | Choice | Why this one |
 |---|---|---|
-| Language | TypeScript on Node 22 | One language across front end, API, sandbox tooling and tests; no context switch under time pressure |
-| Front end + API | Next.js on EC2 | React is required; Next puts the API on the same box, which is one deploy target instead of two |
-| Database | RDS Postgres | Requests, revisions, messages, artifacts, brand state. Also the queue, via `FOR UPDATE SKIP LOCKED` |
-| Queue | The `runs` table | A queue service would duplicate what the table and provider liveness already do, and create a second source of truth |
-| Object store | S3 | Brains, run outputs, transcripts, recordings, Terraform state. Versioning on, and the key is the relative path |
-| Edge | CloudFront → VPC origin → internal ALB | Keeps the load balancer private; also the route the sandbox uses to ACK |
-| Sandbox | E2B, one per run | A plain provider rather than a managed-agent platform. Off-box by construction, which satisfies the co-location constraint structurally |
-| Agent | Claude Agent SDK, in-sandbox | Custom tools on an in-process MCP server, plus hooks for durability enforcement |
-| Image model | gpt-image-2 | Required. Wrapped as a tool so the size arithmetic is deterministic and the aesthetic judgement stays with the model |
+| Language | TypeScript on Node 22 | One language across front end, API, sandbox tooling and tests |
+| Front end + API | Next.js, **run locally** | React is required; Next puts the API in the same process, so one thing to run and nothing to deploy |
+| Database | Supabase Postgres | Reachable from both the laptop and the sandbox — which is what makes a local backend workable |
+| Isolation | Supabase RLS + a scoped run JWT | Enforced where the data lives, so the cross-tenant leak is a database rule rather than a credential wrapper |
+| Queue | The `runs` table | `FOR UPDATE SKIP LOCKED`; a queue service would duplicate what the table and provider liveness already do |
+| Object store | Supabase Storage | `brains` and `work`, both private. Key is the relative path, so resume is a sync |
+| Live updates | Supabase Realtime | The asset view fills in as artifacts land, with no polling code to write |
+| Sandbox | E2B, one per run | The one piece that must be remote, because the brief forbids the agent on your laptop |
+| Agent | Claude Agent SDK, in-sandbox | In-process tools plus the hooks durability depends on |
+| Image model | gpt-image-2 | Required. Wrapped as a tool so the size arithmetic is deterministic and judgement stays with the model |
 | Render + browser | Playwright, in-sandbox | HTML to PNG and the deploy browser are the same dependency, so one template covers both |
-| Save-out | `save_work` script in the box | The agent saves its own work. A plain executable is inspectable by hand inside the box, which is how it gets debugged |
-| Secrets | Secrets Manager → scoped STS | Agent gets a session limited to one revision prefix; blast radius is one prefix |
-| Deploy transport | SSM Run Command | EC2 has no public IP, so there is nothing to SSH to |
-| Registry | ECR + Parameter Store | Image tags are git SHAs; the E2B template id is a parameter, so a rebuild needs no code change |
-| IaC | Terraform ≥ 1.11, S3 backend | `use_lockfile` gives native state locking with no DynamoDB table |
-| CI/CD | GitHub Actions + OIDC | No long-lived AWS keys in the repo |
-| Tests | Vitest + pngjs | No native dependencies, no browser needed for the check library, sub-second runs |
+| Save-out | `save_work` script in the box | The agent saves its own work; a plain executable is inspectable by hand inside the box |
+| Schema | Numbered SQL migrations | Same property Terraform state gave us — a reviewer can see how the shape was reached |
+| CI | GitHub Actions | Grades the code regardless of where the code runs |
+| Tests | Vitest + pngjs | No native dependencies, no browser for the check library, sub-second runs |
 
 ### The architecture, and why each piece is there
 
 Bracketed numbers are the stage that builds that piece.
 
 ```
-                              operator's browser
-                                      │
-                                      │  HTTPS · the only public entry
-                                      ▼
+   everything is OUTBOUND — nothing connects in to the local machine
+
 ┌───────────────────────────────────────────────────────────────────────────┐
-│ [3] CloudFront                                                            │
-│                                                                           │
-│ why  · the single public door — and the path the sandbox ACKs             │
-│        through, because it sits off-AWS and the ALB is private            │
-│ fits · nothing else is publicly reachable, so "everything in the          │
-│        VPC" holds for the whole control plane                             │
-└───────────────────────────────────────────────────────────────────────────┘
-                                      │  VPC origin
-                                      ▼
-┌───────────────────────────────────────────────────────────────────────────┐
-│ [3] internal ALB                                                          │
-│                                                                           │
-│ why  · a health check nothing else provides — a 503 during an             │
-│        in-place restart instead of a refused connection                   │
-│ fits · kept where the queue was dropped: unlike SQS it duplicates         │
-│        nothing another component already does                             │
-└───────────────────────────────────────────────────────────────────────────┘
-                                      ▼
-┌───────────────────────────────────────────────────────────────────────────┐
-│ [3] EC2 · private subnets · Next.js                                       │
-│     React front end + API together                                        │
-│     [4] deployed by SSM   [5] brain ingest   [9] chat surface             │
+│ [3] YOUR MACHINE · localhost                                              │
+│     Next.js — React front end + API together                              │
+│     [4] brain ingest   [8] chat surface                                   │
 │                                                                           │
 │ why  · React is required by the brief; Next puts the API on the           │
-│        same box, so one deploy target instead of two                      │
-│ fits · NEVER runs an agent. Enforced by having no agent runtime           │
-│        installed and a DB constraint requiring a sandbox id, not          │
-│        by discipline. That is disqualifier 3.                             │
+│        same process, so one thing to run                                  │
+│ fits · NEVER runs an agent. No Agent SDK in the package, a lint           │
+│        rule against child_process, and a DB constraint requiring          │
+│        a sandbox_id. That is disqualifier 3 — and it matters more         │
+│        here, because the agent is now easy to reach.                      │
 └───────────────────────────────────────────────────────────────────────────┘
               │                                        │
+              │ create box +                           │ read + reconcile
+              │ write HYDRATION.md                     │
               ▼                                        ▼
-┌──────────────────────────────────┐   ┌──────────────────────────────────┐
-│ [3] RDS Postgres                 │   │ [3] S3 · versioned               │
-│     isolated subnets             │   │     cq-brains   [5]              │
-│     runs · revisions             │   │     cq-work     [6]              │
-│     messages · artifacts         │   │     cq-tfstate  [2]              │
-│     brand state                  │   │                                  │
-│     [8] the runs table           │   │                                  │
-│         IS the queue             │   │                                  │
-│                                  │   │                                  │
-│ why  · state and queue in        │   │ why  · the file system the       │
-│   one place; SKIP LOCKED         │   │   whole design rests on          │
-│   gives the cap for free         │   │ fits · key = relative path,      │
-│ fits · no second source of       │   │   so resume is a sync and        │
-│   truth about what is            │   │   the bucket is browsable        │
-│   pending                        │   │                                  │
-└──────────────────────────────────┘   └──────────────────────────────────┘
-              │
-              │  [6] create box · write HYDRATION.md in
-              ▼
 ╔═══════════════════════════════════════════════════════════════════════════╗
-║ [6] E2B sandbox · ONE PER RUN · outside the VPC                           ║
-║     boots holding only an opaque run id                                   ║
+║ [5] E2B sandbox · ONE PER RUN · the only thing not local                  ║
+║     boots holding only an opaque run id + a scoped JWT                    ║
 ║     Claude Agent SDK  ·  [0] skill, plate, overlay, render                ║
-║     [10] Playwright browser + recording                                   ║
+║     [9] Playwright browser + recording                                    ║
 ║                                                                           ║
-║ why  · a plain sandbox provider rather than a managed-agent               ║
-║        platform, which the brief warns costs you day two                  ║
-║ fits · the agent cannot live where the backend lives —                    ║
-║        structurally, not by policy. No box identity names a               ║
-║        tenant or a task, so no brand can leak through identity.           ║
+║ why  · a plain sandbox provider, not a managed-agent platform.            ║
+║        The brief forbids the agent running on your laptop; this           ║
+║        is the one piece that must be remote.                              ║
+║ fits · the agent cannot live where the backend lives. No box              ║
+║        identity names a tenant or a task.                                 ║
 ╚═══════════════════════════════════════════════════════════════════════════╝
-        │                      │                        │
-        │ write-through        │ ACK + finish_run       │ model and
-        │ scoped STS, own      │ via CloudFront, with   │ browser
-        │ prefix only          │ a per-run token        │ calls
-        ▼                      ▼                        ▼
-   S3, its own prefix     EC2 API                  OpenAI · Anthropic
-                                                   · Adstream
+              │
+              │ upload artifacts · insert rows · never speaks to the backend
+              ▼
+┌───────────────────────────────────────────────────────────────────────────┐
+│ [2] SUPABASE · hosted                                                     │
+│     Postgres: runs · revisions · messages · artifacts · brand state       │
+│              [7] the runs table IS the queue                              │
+│     Storage: brains/<kit-id>/…    work/<task-id>/rev-<n>/…                │
+│                                                                           │
+│ why  · reachable from both the laptop and the sandbox, which is           │
+│        what makes a local backend workable at all. Realtime pushes        │
+│        artifacts to the UI with no polling code.                          │
+│ fits · RLS is the isolation. A run JWT carries revision_id and            │
+│        brand_kit_id; policies make those the only rows and objects        │
+│        it can touch. The cross-tenant leak becomes a database rule,       │
+│        enforced where the data lives.                                     │
+│        Key = relative path, so resume is a sync.                          │
+└───────────────────────────────────────────────────────────────────────────┘
+              │
+              ▼
+   third-party APIs, called from the sandbox only
+   OpenAI gpt-image-2  ·  Anthropic  ·  Adstream
 
    ✗ NEVER · the backend reading the box · syncing an out-directory ·
-             spawning the agent locally. Each is a listed disqualifier.
+             spawning the agent locally · the service_role key in a
+             sandbox env, which would switch RLS off entirely
 
    [1]  CI automates the checks ..... the eval layer is a precondition
-   [7]  sandbox evaluation layer .... what only a live box can prove
-   [11] evidence .................... leak · kill · interleave · third brand
+   [6]  sandbox evaluation layer .... what only a live box can prove
+   [10] evidence .................... leak · kill · interleave · third brand
 ```
 
 ---
@@ -1024,151 +1018,138 @@ Resolve the brand data, build the plate call and the overlay, render to PNG, loo
 at it. Twenty ads across both brands.
 
 **Stack** TypeScript · gpt-image-2 · Playwright — all local.
-**Why** No AWS, so it costs the infrastructure work nothing. gpt-image-2 is
-required by the brief; Playwright is the same renderer the sandbox will use, so
-nothing is thrown away.
+**Why** No cloud at all, so it costs the rest nothing. gpt-image-2 is required;
+Playwright is the same renderer the sandbox will use, so nothing is thrown away.
 
 ---
 
 ### Stage 1 — Automate the checks
 
-Actions on pull request: typecheck, lint, the suite, the tenant-name grep.
+Actions on pull request: typecheck, lint, the suite, the tenant-name grep, and the
+RLS-enabled-everywhere assertion.
 
 **Stack** GitHub Actions.
-**Why** Already attached to the repo, and no runner to maintain.
+**Why** Already attached to the repo, and it grades the code wherever the code
+runs.
 
 ---
 
-### Stage 2 — Terraform bootstrap, by hand, once
+### Stage 2 — Supabase: schema, buckets, policies
 
-The state bucket and the OIDC deploy role — the two things Terraform cannot
-create for itself.
+Numbered migrations for the ten tables, two private buckets, and RLS on
+everything with deny-by-default.
 
-**Stack** Terraform ≥ 1.11 · S3 backend with `use_lockfile` · GitHub OIDC.
-**Why** Native S3 locking removes the DynamoDB table the old pattern needed. OIDC
-means no long-lived AWS keys ever sit in the repo.
-
----
-
-### Stage 3 — Terraform the whole stack, one apply
-
-Apply the inventory under [Terraform](#terraform).
-
-**Stack** VPC · NAT · VPC endpoints · RDS Postgres · S3 · internal ALB · EC2 ·
-CloudFront VPC origin · Secrets Manager · IAM.
-**Why** One apply, because a delivery pipeline needs its whole target to exist.
-CloudFront VPC origin so the load balancer stays private. Postgres because it
-carries the state *and* the queue.
+**Stack** Supabase Postgres · Supabase Storage · SQL migrations.
+**Why** RLS is the isolation, so it has to exist before anything writes. Hosted
+rather than local, because the sandbox has to reach it and a local Supabase has
+the same unreachability problem a local API does.
 
 ---
 
-### Stage 4 — The application, and the pipeline that ships it
+### Stage 3 — The application, locally
 
-The Next.js shell, the operator views, the intake and ACK endpoints — then both
-pipelines. Until this stage there is nothing to deploy.
+The Next.js shell, the operator views, and the intake path. Nothing to deploy.
 
-**Stack** Next.js on EC2 · ECR · SSM Run Command · Parameter Store.
-**Why** Next puts React and the API on one box, so one deploy target instead of
-two. SSM rather than SSH because EC2 has no public IP. The E2B template id lives
-in Parameter Store so a sandbox rebuild needs no code change.
+**Stack** Next.js · `next dev` · Supabase client · Realtime.
+**Why** Realtime means the asset view updates as artifacts land without a polling
+loop. Running locally removes the edge, the load balancer, the compute layer and
+the deploy pipeline outright — none of which earned points.
 
 #### The front end, stage by stage
 
-A thread rather than a single stage, so here is what appears when.
-
 | Stage | What lands in the UI |
 |---|---|
-| **4** | The shell: layout, routing, customer switcher, run list, empty asset view |
-| **5** | Brain ingest: upload, and the findings report shown *before* anything commits |
-| **6** | The asset view fills in, at whatever count the run produced |
-| **8** | Run state: partial saves labelled *"saved early"*, delete, re-run |
-| **9** | Chat against a named revision |
-| **10** | Deploy, the recording link, the verified detail page |
+| **3** | The shell: layout, routing, customer switcher, run list, empty asset view |
+| **4** | Brain ingest: upload, and the findings report shown *before* anything commits |
+| **5** | The asset view fills in over Realtime, at whatever count the run produced |
+| **7** | Run state: partial saves labelled *"saved early"*, delete, re-run |
+| **8** | Chat against a named revision |
+| **9** | Deploy, the recording link, the verified detail page |
 
 ---
 
-### Stage 5 — Brain ingest
+### Stage 4 — Brain ingest
 
-Upload a brain, store every object at `<kit-id>/<path>`, write the kit, asset and
-font rows, show the findings report before committing.
+Upload a brain, store every object at `brains/<kit-id>/<path>`, write the kit,
+asset and font rows, show the findings report before committing.
 
-**Stack** `planIngest` (already built) · S3 · RDS.
-**Why** A pure planner needs no bucket and no database to test, so the logic was
+**Stack** `planIngest` (already built) · Supabase Storage · Postgres.
+**Why** A pure planner needed no bucket and no database to test, so the logic was
 verifiable before either existed.
 
 ---
 
-### Stage 6 — One real sandbox run, end to end
+### Stage 5 — One real sandbox run, end to end
 
 Hydrate a box, pull the brain fresh, generate, save, kill it.
 
-**Stack** E2B · Claude Agent SDK · `save_work` · scoped STS.
-**Why** E2B is a plain sandbox provider rather than a managed-agent platform,
-which the brief warns costs day two. The Agent SDK gives in-process tools and the
-hooks durability depends on. STS scoped to one revision prefix keeps blast radius
-to one prefix.
+**Stack** E2B · Claude Agent SDK · `save_work` · scoped run JWT.
+**Why** E2B is a plain provider rather than a managed-agent platform. The JWT
+carries `revision_id` and `brand_kit_id`, and RLS turns those claims into the only
+rows and objects the run can touch — no endpoint of ours in the path.
 
 ---
 
-### Stage 7 — Sandbox evaluation layer
+### Stage 6 — Sandbox evaluation layer
 
 Tests for what only a live box can prove: hydration fidelity digest for digest,
-credentials *denied* another revision's prefix, key-equals-relative-path,
-font provenance in a real render, durability across a mid-run kill.
+cross-revision writes **denied**, cross-kit asset reads returning zero rows,
+key-equals-relative-path, font provenance in a real render, durability across a
+mid-run kill, and the `service_role` key absent from every launch payload.
 
-**Stack** Vitest · E2B SDK.
-**Why** The same runner as the local layer, so one command covers both and there
-is no second harness to learn.
+**Stack** Vitest · E2B SDK · Supabase client with a run JWT.
+**Why** The same runner as the local layer, so one command covers both. And a run
+JWT makes the isolation tests plain SQL — far harder to fake than a green tick.
 
 ---
 
-### Stage 8 — The engine
+### Stage 7 — The engine
 
 Concurrency to the cap, resume, retry, partial saves, soft delete, re-run.
 
-**Stack** Postgres `FOR UPDATE SKIP LOCKED` · E2B lifecycle API.
-**Why** The runs table is already the queue, so the cap is a `count(*)` and no
-queue service is needed. Asking E2B whether a sandbox still exists is
-authoritative, where a heartbeat only proves the box was alive some seconds ago.
+**Stack** Postgres `FOR UPDATE SKIP LOCKED` · E2B lifecycle API · `pg_cron`.
+**Why** The runs table is already the queue, so the cap is a `count(*)`. Asking
+E2B whether a sandbox exists is authoritative where a heartbeat only proves the box
+was alive some seconds ago. `pg_cron` removes soft-deleted objects, since Storage
+has no lifecycle rules.
 
 ---
 
-### Stage 9 — Chat surface
+### Stage 8 — Chat surface
 
 A message against a named revision reaches the agent, and the updated asset
 returns.
 
-**Stack** Next.js · RDS.
+**Stack** Next.js · Postgres · Realtime.
 **Why** Chat rather than pins because the graded part is whether the message
 hydrates to the right tenant, task and revision — identical either way — and the
 hours saved go to deploy.
 
 ---
 
-### Stage 10 — Deploy *(automatic disqualifier if unfinished)*
+### Stage 9 — Deploy *(automatic disqualifier if unfinished)*
 
 A deploy is its own run, so it spins **its own fresh box** — the generation box
 died when that run ended. This one hydrates the finished artifacts from
-`rev-<n>/` rather than a brain, drives Adstream, saves the recording, and reads
-the detail page back.
+`work/<task-id>/rev-<n>/` rather than a brain, drives Adstream, saves the
+recording, and reads the detail page back.
 
 **Stack** Playwright in the sandbox, agent-driven.
 **Why** The browser has to run where the agent runs, or the paradigm breaks. And
-Playwright is already baked into the template for HTML-to-PNG rendering, so deploy
-adds no new dependency and needs no second template — one image serves both, and
-only the credentials, the allowed tools and the prompt differ. The agent decides
-from each screenshot rather than following a selector script, because the graded
-test is resilience to a UI change.
+Playwright is already in the template for rendering, so deploy adds no new
+dependency — only the credentials, the allowed tools and the prompt differ. The
+agent decides from each screenshot rather than following a selector script, because
+the graded test is resilience to a UI change.
 
 ---
 
-### Stage 11 — Evidence
+### Stage 10 — Evidence
 
-Plant a leak and catch it, then weaken the filter and watch the same check fail.
+Plant a leak and catch it, then relax the RLS policy and watch the same check fail.
 Kill a box and resume. Run the interleaved concurrent case. Take a third brain
 through untouched.
 
-**Stack** The suites from stages 1 and 7.
+**Stack** The suites from stages 1 and 6.
 **Why** Nothing new to build — both harnesses already exist, which is the point of
 having built them first.
 
@@ -1203,10 +1184,10 @@ with `SELECT ... WHERE state='queued' ORDER BY created_at FOR UPDATE SKIP LOCKED
 limited by the named cap minus the current `running` count. "The fourth request
 waits" is a row staying `queued`. No scheduler.
 
-SQS was removed deliberately: its three jobs here — cap enforcement, durability
-of pending work, and reclaiming stalled runs — are all things the run table and
-provider liveness already do, and running both meant two sources of truth about
-whether a run was pending.
+A dedicated queue service was considered and rejected: its three jobs here — cap
+enforcement, durability of pending work, and reclaiming stalled runs — are all
+things the run table and provider liveness already do, and running both would mean
+two sources of truth about whether a run is pending.
 
 ### Run states, partial saves, and deletion
 
@@ -1261,7 +1242,7 @@ artifact is already durable, and it never involves reading the box.
 Killing a sandbox is not moving work out of it. Reading its filesystem is. No
 button, timeout, or teardown path does the second thing.
 
-Resume: kill the box, spin a new one, rehydrate from S3 and RDS, and the agent
+Resume: kill the box, spin a new one, rehydrate from Storage and Postgres, and the agent
 picks up as though the files were never deleted. It should never know.
 
 When a run dies mid-flight: the image model call may already have succeeded and
