@@ -214,6 +214,14 @@ there has been verified in durable storage and must not be regenerated. That is
 what makes a resumed run cheap and what stops a retry re-billing an image call
 that already succeeded.
 
+**Reusing a parent plate has a condition.** SKILL.md is specific about revising an
+existing output: *"Keep the plate only if it is still text-, logo- and CTA-free.
+Otherwise wipe or regenerate it."* Our plates satisfy that by construction — they
+are generated textless and logo-free, and every word is an overlay — so reuse is
+normally safe. The condition is still stated in the prompt rather than assumed,
+because it is the agent that has to decide, and a plate inherited from anywhere
+other than our own generator would not carry the guarantee.
+
 ## Save-out
 
 The agent moves its own work. Nothing else does.
@@ -1031,8 +1039,14 @@ Bracketed numbers are the stage that builds that piece.
 
 ### Stage 0 — Gate 0: ads worth defending *(next)*
 
-Resolve the brand data, build the plate call and the overlay, render to PNG, look
-at it. Twenty ads across both brands.
+Resolve the brand data, build the plate call, build the overlay, render to PNG,
+look at it. Twenty ads across both brands.
+
+The overlay contract is SKILL.md's, not ours: exactly one fixed canvas root with
+explicit pixel width and height and clipped overflow, exactly one full-canvas local
+plate, and every headline, body line, legal line, label, logo and CTA word as a
+positioned overlay carrying `data-cq-role="text"`, `"logo"` or `"cta"`. No element
+in the overlay layer draws anything except text, a logo, or a CTA.
 
 **Stack** TypeScript · gpt-image-2 · Playwright — all local.
 **Why** No cloud at all, so it costs the rest nothing. gpt-image-2 is required;
@@ -1072,11 +1086,34 @@ The Next.js shell, the operator views, and the intake path. Nothing to deploy.
 loop. Running locally removes the edge, the load balancer, the compute layer and
 the deploy pipeline outright — none of which earned points.
 
+#### Request intake — the composer
+
+The brief calls this out with a screenshot, and it names two properties: *"Choosing
+an inspiration is its own step, and the composer treats Brand Kit, Brain, Templates
+and Past work as four separate things."*
+
+So intake is a **stepped composer**, not one form:
+
+1. **Describe the request** — campaign, copy, canvases. Brand kit and brain are
+   selected as *separate* inputs, because they are separate things: the kit is the
+   staged assets and their ids, the brain is `DESIGN.md` and the fonts.
+2. **Choose an inspiration** — its own step, listing the files by name, and
+   defaulting to none. An inspiration is only ever selected deliberately; one that
+   merely sits in a directory has not been chosen and must not influence the build.
+3. **Add details** — notes, and the canvas set.
+4. **Review** — what will be hydrated, before a run is created.
+
+Templates and Past work are the other two things the composer separates. Neither
+exists in this packet, so both are surfaced as empty rather than silently folded
+into the brain — an absent input that looks absent is honest; one that looks
+merged is not.
+
 #### The front end, stage by stage
 
 | Stage | What lands in the UI |
 |---|---|
 | **3** | The shell: layout, routing, customer switcher, run list, empty asset view |
+| **3** | The stepped composer, with inspiration selection as its own step |
 | **4** | Brain ingest: upload, and the findings report shown *before* anything commits |
 | **5** | The asset view fills in over Realtime, at whatever count the run produced |
 | **7** | Run state: partial saves labelled *"saved early"*, delete, re-run |
@@ -1265,8 +1302,22 @@ picks up as though the files were never deleted. It should never know.
 When a run dies mid-flight: the image model call may already have succeeded and
 been billed while the save got halfway. Recovery is per-artifact — anything
 whose object landed and verified is reused; anything unverified is regenerated.
-Which states a retry recovers and which need a human is documented, having been
-found by crashing a run on purpose.
+**Which states a retry recovers, and which need a human.** The brief asks for this
+explicitly, so here it is rather than a promise to produce it. Found by crashing
+runs on purpose, not by reasoning about them.
+
+| Run state | Retry recovers it? |
+|---|---|
+| `queued` | Yes — nothing has happened yet |
+| `running`, heartbeat lost | Yes — a fresh box rehydrates; ACKed artifacts are reused, unverified ones regenerated |
+| `partial` (operator ended it early) | Yes — the same path as an interruption |
+| `failed` before any artifact | Yes — nothing to reconcile |
+| `failed` after some artifacts | Yes — `already_durable[]` reuses the verified ones, so a billed image call is not repeated |
+| Object uploaded, row insert lost | Yes — reconciliation finds the orphan by prefix and inserts it |
+| Row inserted, object missing | **No** — needs a human. The digest cannot be verified against bytes that are not there, so the row is quarantined rather than trusted |
+| `completed`, deploy published but detail page unread | **No** — needs a human. The ad may be live and unverified; a blind retry could publish a duplicate, because Adstream does not dedupe |
+
+The last two are the honest answer to the question. Everything else is automatic.
 
 Every run saves its own agent transcript alongside the work.
 
@@ -1388,6 +1439,11 @@ evidence that nothing crossed.
 - The Kahua 728x90 impossibility.
 - Barlow Condensed named but not shipped.
 - The missing `kahua-logo-white.svg`.
+- What the sandbox provider can see. Whatever sits in a box's environment is
+  visible to E2B, which is why the run JWT is short-lived and scoped to one
+  revision, and why `service_role` never goes near a sandbox.
+- The deploy-interrupted state: an ad may be live, unrecorded and unverified if a
+  box dies between publishing and reading the detail page.
 
 ## What gets submitted
 
@@ -1398,8 +1454,8 @@ Treated as part of the deliverable, not paperwork.
   includes the sessions that produced this spec, dead ends included. They are
   committed as captured; the mess is the point.
 - The repo with full git history.
-- Everything the system produced: ads for all three brands, plates, bucket
-  contents, a database dump, deploy recordings.
+- Everything the system produced: ads for all three brands, plates, the contents
+  of both Storage buckets, a Postgres dump from Supabase, deploy recordings.
 - `DECISIONS.md`, carrying the four routed questions plus what was stubbed and
   which claims are least certain.
 
