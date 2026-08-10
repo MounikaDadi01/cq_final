@@ -623,6 +623,42 @@ directly. Three are recoverable; one is not.
 Plates are always generated **above** target and downscaled, never upscaled.
 Downscaling preserves detail; upscaling invents it.
 
+### Why reducing is allowed, and where we deviate
+
+Worth setting out, because it is the first thing a reviewer should push on.
+
+**Resizing is not among the prohibitions.** Invariant 2 forbids five operations:
+*"Never **crop, stretch, letterbox, pad or re-frame** one plate into a different
+aspect ratio."* Scaling is not in that list, and a uniform reduction is none of
+those five.
+
+**The structural checks presuppose it.** One of them is *"The plate fills the
+canvas with **uniform scale on both axes**."* If a plate were always born at canvas
+size that check would be trivially 1:1 and pointless to write; its existence, and
+its emphasis on *uniform*, means scaling is expected and anisotropy is the thing
+being guarded against. Logos follow the same pattern — *"Scale it by constraining
+one dimension and letting the other resolve"*, with the only prohibition being
+*"never apply unequal X and Y scale."*
+
+**Where we do deviate.** Invariant 2 also says a plate *"is generated at the exact
+target pixel dimensions"*, and the plate-source table repeats it. We generate at
+1088x1088 and reduce to 1080x1080, so that phrase is not satisfied.
+
+It cannot be, by anyone. **No required canvas is divisible by 16**, so no
+implementation can generate at exact target dimensions with this model. Something
+has to give, and the only question is which deviation is smallest:
+
+| Option | Verdict |
+|---|---|
+| **Uniform reduction** — what we do | Breaks none of the five prohibitions, and satisfies the uniform-scale check |
+| Place oversized and let the canvas clip | Available — the root does have *"clipped overflow"* — but discarding 8px **is a crop**, which is forbidden outright |
+| Non-uniform stretch to exact size | Forbidden outright — *"never stretch"* |
+
+Ours is the only option that breaks nothing stated as a prohibition. The
+generation size is recorded on every plate alongside the target, so the deviation
+is auditable rather than hidden, and the saved plate artifact is exactly canvas
+size and used at exactly those dimensions.
+
 The 300:157 case is worth stating precisely: because 157 is prime, an exact
 match needs 4800x2512, which breaches the 3840px edge limit. The residual
 0.0033% anisotropy is two hundredths of a pixel and is the honest cost of the

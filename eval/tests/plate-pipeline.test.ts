@@ -51,6 +51,22 @@ describe('a plate comes back at exactly the target size', () => {
     )
   })
 
+  it('records the deviation instead of hiding it', async () => {
+    // SKILL.md says a plate "is generated at the exact target pixel dimensions".
+    // No required canvas is divisible by 16, so that is unsatisfiable — and the
+    // honest handling is to carry the generation size on the result so the gap is
+    // auditable. This test fails if anyone stops recording it.
+    for (const canvas of servable) {
+      const result = await generatePlate(
+        { targetWidth: canvas.width, targetHeight: canvas.height, prompt: 'x' },
+        fakeCaller(),
+      )
+      expect(result.generatedWidth).not.toBe(canvas.width)
+      expect(result.raster.width).toBe(canvas.width)
+      expect(result.raster.height).toBe(canvas.height)
+    }
+  })
+
   it('reduces, never enlarges', async () => {
     for (const canvas of servable) {
       const result = await generatePlate(
