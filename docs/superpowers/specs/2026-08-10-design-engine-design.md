@@ -127,7 +127,7 @@ and nothing else does:
 | Fetched per run | `brain/DESIGN.md` | Presigned, digest-checked |
 | Fetched per run | `brain/brand/asset_manifest.json` | Presigned, digest-checked |
 | Fetched per run | `brain/brand/*.svg` — **only** assets whose `kit_id` equals the run's kit | Filtered at render time |
-| Fetched per run | `brain/fonts/*` — **only** families named in `DESIGN.md` | Filtered at render time |
+| Fetched per run | `brain/fonts/*` — the whole directory for that kit | No filtering, no parsing |
 | Fetched per run | `inspirations/*` — **only** filenames the request names | Empty list means none |
 | Fetched per run (edits) | Parent plate and parent HTML for the canvases being edited | From the parent revision's artifacts |
 | Written in | `HYDRATION.md` | Backend writes it via the E2B filesystem API |
@@ -139,8 +139,33 @@ Three filters do the real work, and each maps to a constraint:
 - **Inspirations only when named.** An inspiration that merely sits in a
   directory is not selected and must not influence the build, so the fetch list
   is built from the request's array, never from a bucket listing.
-- **Fonts only from that brain.** Every family named in `DESIGN.md` is fetched,
-  because browser fallback is not the brand.
+- **Fonts: the whole directory, unfiltered.** An earlier draft filtered fonts to
+  the families `DESIGN.md` names, which would have required the backend to parse
+  brand prose — fragile, and exactly where per-customer logic creeps into code.
+  Four TTFs are small, they all belong to the same kit so there is no
+  cross-tenant risk, and shipping the directory deletes the parsing entirely.
+
+### The backend never reads DESIGN.md
+
+`DESIGN.md` is shipped as a file and interpreted by the agent. No backend code
+parses it, resolves its conflicts, or extracts values from it. This is the rule
+that keeps brand knowledge out of the codebase, and it is what makes the
+third-brand test structural rather than hopeful.
+
+Conflicts are resolved by the agent under generic policy carried in the prompt
+preamble — for example, *where `DESIGN.md`'s prose contradicts its own table,
+the prose governs* — never by a branch that names a customer.
+
+The same applies to font substitution. The policy is generic: **when a family
+named in `DESIGN.md` has no matching file, fall back to the nearest family by
+name prefix at the heaviest available weight, and record the substitution.**
+That rule produces Barlow 700 for this packet's missing Barlow Condensed without
+anything in the code knowing what Barlow is, and a third brand naming
+"Foo Condensed" with only Foo shipped is handled by the same sentence.
+
+**Enforced, not promised:** CI greps the source tree for tenant names and fails
+the build on a hit outside fixtures and tests. That turns "no brand is
+hardcoded" into evidence.
 
 `brand/tokens.json` is deliberately **not** sent. It carries no authority, it is
 not permitted to contribute a value `DESIGN.md` also states, and in this packet
@@ -289,7 +314,7 @@ the filter works.
 | Conflict | Resolution |
 |---|---|
 | Type scale says h1 56px; the *Applying it* prose says 48px on every canvas; `tokens.json` says 56px | 48px. The prose is as binding as the numbers, and it is the more specific statement. |
-| Heading font is Barlow Condensed; `fonts/` ships only Barlow 400/500/600/700 | Barlow 700, tightly tracked. Recorded as a substitution. Browser fallback is not the brand, so nothing is left to chance. |
+| Heading font is Barlow Condensed; `fonts/` ships only Barlow 400/500/600/700 | Barlow 700, tightly tracked — the output of the generic nearest-family fallback, not a rule about Barlow. Recorded as a substitution. |
 | Manifest lists `brand/kahua-logo-white.svg`; the file does not exist | Omit the reverse logo, or place the standard logo where the ground permits. Never typeset a substitute. |
 | The Kahua inspiration uses a red CTA (~`#E4002B`) and a Hensel Phelps co-brand lockup | Ignored. Accent `#F26B21` carries the CTA; no hue outside the palette. |
 
@@ -456,7 +481,10 @@ One apply, full stack.
 
 Networking: VPC across two AZs; public subnets for NAT; private app subnets;
 isolated DB subnets; IGW; NAT gateway; route tables. S3 gateway endpoint;
-interface endpoints for Secrets Manager, STS, CloudWatch Logs.
+interface endpoints for Secrets Manager, STS, CloudWatch Logs, and — required for
+the deploy pipeline — `ssm`, `ssmmessages`, and `ec2messages`. The instance
+profile carries `AmazonSSMManagedInstanceCore`; without it Run Command has no
+targets and the pipeline fails with nothing to point at.
 
 Compute and data: EC2 in private subnets behind an internal ALB; RDS Postgres
 in isolated subnets with credentials in Secrets Manager. No separate queue
@@ -471,10 +499,34 @@ with `use_lockfile = true`. State locking is native S3; no DynamoDB table.
 IAM: EC2 instance role, the assumable per-run agent role, Terraform execution
 role.
 
+## Keeping the agent off the backend
+
+Three guards, in descending order of how much they actually enforce:
+
+1. **No agent runtime on EC2.** The Agent SDK is not installed on the instance
+   and the API package has no dependency that executes one. A lint rule bans
+   `child_process` in that package.
+2. **A run row requires a non-null sandbox id**, enforced by a database
+   constraint. A run with no sandbox cannot reach `succeeded`, so a locally
+   executed generation has nowhere to record itself.
+3. **Least privilege on model keys.** The instance role is denied
+   `GetSecretValue` on the model-key secrets; the agent's run role holds that
+   permission and the backend brokers a short-lived session into the sandbox.
+
+An earlier draft claimed this made local generation *physically impossible*. It
+does not, and the correction matters: the backend mints the run role's session
+and therefore briefly holds credentials that can read those secrets. What guard
+three actually buys is least privilege and a CloudTrail record of every
+`AssumeRole`. Guards one and two are the ones doing enforcement work. Stating
+this accurately is cheaper than having it found.
+
 ## Delivery pipeline
 
 Two pipelines, both GitHub Actions, both authenticating by **OIDC** — no
 long-lived AWS keys ever live in GitHub.
+
+**On pull request:** typecheck, lint, unit tests, and a grep of the source tree
+for tenant names that fails the build on a hit outside fixtures and tests.
 
 **App deploy**, on merge to `main`: build a container image tagged with the git
 SHA, push to ECR, then **SSM Run Command** tells the instance to pull and
@@ -498,16 +550,81 @@ Observability stays thin on purpose: one CloudWatch log group, a `/health`
 endpoint for the target group, run transcripts in S3, and run state visible in
 the UI.
 
-## Sequencing
+## Functional verification
 
-**Gate 0 first, regardless of infra scope.** The skill must generate ads worth
-defending locally, both brands, all four sizes, before anything touches a
-sandbox. It needs no AWS, so it costs the Terraform work nothing. Target is
-twenty ads with the brand conflicts resolved and recorded.
+Ten things that would look correct on paper and fail in practice. Each is paired
+with the check that proves it, because a claim without a check is a hope.
 
-Then: Terraform apply → one real run end to end through the hydration path →
-the engine (concurrency, resume, kill and retry) → feedback surface → deploy
-agent with recording.
+| # | Failure | Check that catches it |
+|---|---|---|
+| 1 | **Fonts silently fall back.** A TTF in a directory is not used by Chromium unless installed into fontconfig or referenced by `@font-face` with a `file://` src. The render looks fine and the type is wrong. | Post-render assertion: computed `font-family` on every text node matches a family loaded from the brain. Fails the render, not a log line. |
+| 2 | **Soft-deleted bytes never expire.** Lifecycle configuration is static, so a per-run prefix rule cannot exist. | Objects tagged `deleted=true`; one static rule targets the tag. Verified by reading the bucket's lifecycle config, not by assuming. |
+| 3 | **Deploy pipeline has no targets.** SSM needs `ssm`, `ssmmessages`, `ec2messages` plus `AmazonSSMManagedInstanceCore`. | `aws ssm describe-instance-information` returns the instance before the pipeline is trusted. |
+| 4 | **Deploy recording lost.** Playwright flushes video on `context.close()`; a box killed mid-deploy loses it, and no recording means no deploy. | Context closed and the recording ACKed as an artifact *before* `finish_run`. A deploy run with no recording artifact cannot reach `completed`. |
+| 5 | **`/api/*` rejects the ACK.** Several managed cache policies block POST. | Its own cache behaviour: caching disabled, POST and PUT allowed. Proven by an ACK from outside the VPC, not from a local test. |
+| 6 | **CloudFront 502s at the ALB.** VPC origins connect through AWS-managed ENIs that the ALB security group must admit. | A request through the distribution reaching the app, before anything else is built on top. |
+| 7 | **Presigned URLs expire mid-run.** A twelve-minute run with five-minute URLs fails on a late fetch. | Expiry exceeds max run duration; the E2B sandbox timeout is set explicitly above expected duration. Verified by a deliberately slow run. |
+| 8 | **State locking silently absent.** `use_lockfile` no-ops on Terraform below 1.11. | Version pinned in `required_version`; two concurrent plans must produce a lock error. |
+| 9 | **Any repo can assume the deploy role.** An unscoped OIDC trust policy. | `sub` restricted to this repository and ref, asserted by reading the trust policy. |
+| 10 | **A tenant name reaches the source tree.** | CI greps for tenant names outside fixtures and tests and fails the build. |
+
+Checks 1 and 4 are the two that would otherwise pass review and fail a
+demonstration, which is why they carry hard failures rather than warnings.
+
+## Roadmap
+
+Ordered. Each step has something that proves it before the next begins.
+
+**Stage 0 — Gate 0, no infrastructure.** Nothing touches a sandbox until this
+passes; the brief makes it a gate and it needs no AWS, so it costs the
+infrastructure work nothing.
+
+1. Resolve and record every brand conflict — the h1 value, the font
+   substitution, the missing reverse logo, the token-cache disagreements.
+2. Build the plate call: target canvas to legal gpt-image-2 size, generate,
+   uniform downscale, exact-dimension output.
+3. Build the overlay: fixed canvas root, positioned text, logo at natural
+   proportions, `data-cq-role` attributes.
+4. Render to PNG and **look at it** — headline legible across the room, copy on
+   quiet ground, logo surviving its background, CTA obviously clickable.
+5. Twenty ads across both brands and every producible size. Email a few.
+
+**Stage 1 — CI foundation.** GitHub Actions on pull request: typecheck, lint,
+unit tests, and the tenant-name grep. Roughly half an hour, and it pays back
+from here on.
+
+**Stage 2 — Terraform bootstrap, by hand, once.** State bucket with versioning
+and `use_lockfile`; GitHub OIDC provider and a deploy role scoped to this repo
+and ref. Breaks the chicken-and-egg exactly once.
+
+**Stage 3 — Terraform full stack, one apply.** VPC across two AZs, public
+subnets for NAT, private app subnets, isolated database subnets, NAT gateway,
+S3 gateway endpoint, interface endpoints including the three SSM ones, RDS,
+buckets, internal ALB, EC2 with the SSM instance profile, CloudFront with a VPC
+origin and two cache behaviours, Secrets Manager, IAM roles. Proven by check 6.
+
+**Stage 4 — Delivery pipelines.** App: build, tag with the git SHA, push to ECR,
+SSM Run Command to pull and restart. Template: `e2b template build` on
+`sandbox/` changes, id to Parameter Store. Proven by check 3.
+
+**Stage 5 — One real run, end to end.** Render a hydration file from rows, write
+it into a box, pull a brain fresh, generate, save through the ACK path, kill the
+box. Proven by checks 5 and 7.
+
+**Stage 6 — The engine.** Concurrency to the named cap, resume after a kill,
+retry after a crash, partial saves, soft delete, re-run.
+
+**Stage 7 — Chat surface.** A message reaching the agent attached to the right
+tenant, task and revision, and the updated asset returning with no manual step.
+
+**Stage 8 — Deploy.** Agent-driven computer use against Adstream, recording
+saved, detail page read back as the only source of truth. Proven by check 4.
+This is an automatic disqualifier if unfinished, so it is a deadline rather than
+a finish.
+
+**Stage 9 — Evidence.** Plant a leak and catch it, kill a box and resume, run
+the interleaved concurrent case with different inspirations, take a third brain
+through unchanged.
 
 ## The engine
 
@@ -561,7 +678,10 @@ looks finished is the failure mode this whole design is arguing against.
 reports done. Mid-run it banks what exists rather than discarding it.
 
 **Deletion is soft.** A `deleted_at` timestamp hides the run and its artifacts
-from the UI; an S3 lifecycle rule expires the bytes later. Soft rather than hard
+from the UI, and **tags its objects `deleted=true`** so a single static lifecycle
+rule expires them later. Tagging rather than a per-run rule because lifecycle
+configuration is static — there is no way to add a rule per deleted run, so a
+prefix-based plan would quietly never delete anything. Soft rather than hard
 for two reasons: revision four may have been built from revision three's plate,
 so a hard delete would orphan a child, and a mis-click should be recoverable.
 
