@@ -442,6 +442,24 @@ step in between.
 The same event as everything else — same box shape, same files — plus a
 browser, credentials, and a different instruction.
 
+**One template, separate instance.** Playwright is already in the image for
+HTML-to-PNG rendering, so a deploy needs no second template; building one would
+duplicate the browser and double what has to be patched. Every deploy is still
+its own run in its own fresh box.
+
+Only four things differ between a generation run and a deploy run, all of them
+driven by the hydration file rather than by a different subsystem:
+
+| | Generation | Deploy |
+|---|---|---|
+| `run.kind` | `generate` / `edit` | `deploy` |
+| Credentials | Image model key | Adstream login |
+| Tools allowed | `generate_plate`, `render_canvas` | browser drive, recording upload |
+| Reads | Brain and request | The finished artifacts |
+
+Least privilege follows from that split: a deploy box never holds an image-model
+key, and a generation box never holds marketing-tool credentials.
+
 The browser runs in the sandbox, never locally. Playwright drives Adstream
 (`https://adstream.bhairav.workers.dev/`), which is a client-rendered SPA, so
 HTTP calls are not an option.
