@@ -759,6 +759,7 @@ that separation is what keeps the agent from living where the backend lives.
 | Agent | Claude Agent SDK, in-sandbox | Custom tools on an in-process MCP server, plus hooks for durability enforcement |
 | Image model | gpt-image-2 | Required. Wrapped as a tool so the size arithmetic is deterministic and the aesthetic judgement stays with the model |
 | Render + browser | Playwright, in-sandbox | HTML to PNG and the deploy browser are the same dependency, so one template covers both |
+| Save-out | `save_work` script in the box | The agent saves its own work. A plain executable is inspectable by hand inside the box, which is how it gets debugged |
 | Secrets | Secrets Manager → scoped STS | Agent gets a session limited to one run prefix; blast radius is one prefix |
 | Deploy transport | SSM Run Command | EC2 has no public IP, so there is nothing to SSH to |
 | Registry | ECR + Parameter Store | Image tags are git SHAs; the E2B template id is a parameter, so a rebuild needs no code change |
@@ -778,6 +779,19 @@ with a deadline rather than a stage with a sequence position.
 No infrastructure. The brief makes this a gate: nothing touches a sandbox until
 the skill reliably makes ads worth defending, because everything downstream is
 undebuggable until this part is boring.
+
+**Prerequisites**
+
+| Need | State |
+|---|---|
+| Source packet extracted to `packet/` | ✅ `cd eval && npm run unpack` |
+| Canvas planner, brain loader, render checks | ✅ built, 106 tests |
+| `OPENAI_API_KEY` in `.env` | ⛔ **blocks the plate call** |
+| Playwright browser installed locally | ⛔ one command, ~300 MB |
+| Claude Code or Codex to drive the skill | Existing subscription |
+
+`.env` is gitignored; `.env.example` documents the variables. No AWS account,
+no E2B key, and no Adstream credentials are needed for this stage.
 
 - Resolve and record every brand conflict — the h1 value, the font substitution,
   the missing reverse logo, the token-cache disagreements.

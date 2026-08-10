@@ -24,3 +24,6 @@ build/
 
 # OS
 .DS_Store
+
+# Extracted source packet — the zips are committed, the extraction is not
+/packet/

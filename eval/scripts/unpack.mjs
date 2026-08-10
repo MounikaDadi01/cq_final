@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const repo = resolve(here, '..', '..')
-const out = resolve(here, '..', '.packet')
+const out = resolve(here, '..', '..', 'packet')
 
 const zips = ['design-brains.zip', 'inspirations.zip', 'starter.zip']
 

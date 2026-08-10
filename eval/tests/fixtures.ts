@@ -8,7 +8,7 @@ import type { ArtifactBundle, OverlayElement } from '../src/checks'
 import { makePng, type Raster } from '../src/png'
 
 const here = dirname(fileURLToPath(import.meta.url))
-export const PACKET = resolve(here, '..', '.packet')
+export const PACKET = resolve(here, '..', '..', 'packet')
 
 /**
  * Finds the directory whose children are brains, rather than assuming how deep
