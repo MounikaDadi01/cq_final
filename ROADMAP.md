@@ -962,6 +962,31 @@ upload, the rows to write, and what is wrong with the input. It touches no bucke
 and no database, so it is testable before either exists and the backend's job
 reduces to executing a plan.
 
+### One kit per request, several kits per customer
+
+SKILL.md is unambiguous on the run: *"The request **pins one brand kit id.** Use
+only manifest assets whose `brand_kit_id` equals it."* A run resolves exactly one
+kit, never two, and never falls back to a sibling.
+
+Above that, a customer can own more than one. The ids say so — `bk-kahua-2026`
+carries a year, which only means something if another year exists — and the brief
+confirms kits change over time while forbidding us to build for it: *"Assume the
+kit is set… but a version graph is time you didn't spend finishing."*
+
+The packet also proves a manifest can physically carry assets belonging to several
+kits: Emplifi's references both `bk-emplifi-2026` and `bk-kahua-2026`. That is the
+whole reason resolution filters on `kit_id` rather than on the folder.
+
+So `brand_kits` carries a **customer** grouping: one customer, many kits, and a
+request pins one. No version graph. This also matches the composer, which treats
+*Choose customer* and *Brand Kit* as separate selections rather than one.
+
+**Where the customer comes from is worth stating.** Not the folder name — folders
+lie, as this packet demonstrates. Not parsed out of the kit id, because deriving
+brand facts from a name is exactly what the resolution rules forbid. **The operator
+supplies it at ingest**, and the findings report records that a human did. The
+manifest does not say, so a person says, and we write down that a person said.
+
 ### Identity comes from the manifest
 
 The kit id is read from `asset_manifest.json`, never from the folder name, and
