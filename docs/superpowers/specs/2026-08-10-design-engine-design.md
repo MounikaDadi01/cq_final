@@ -262,10 +262,35 @@ edit call can return an 8:1 image either. Filling a 728x90 canvas from a
 generated plate would require cropping or stretching, both forbidden by
 SKILL.md invariant 2.
 
-The run therefore reports the arithmetic and escalates rather than failing at
-request time, which is what the brief asks for. If a leaderboard plate is
-genuinely required, the documented fallback is a second image model without an
-aspect-ratio ceiling — a deviation recorded in DECISIONS.md, not a silent crop.
+No other model rescues it either. gpt-image-2's 3:1 is the *most* permissive
+ceiling among current models — Nano Banana Pro caps at 21:9 (2.33:1), Flux is
+practically the same, and Ideogram and Recraft expose preset ratios only. No
+vendor has announced native 8:1 support, because extreme ratios break
+composition. Changing model makes this worse, not better.
+
+So 728x90 cannot be produced plate-first by any available means, and the honest
+handling is procedural rather than technical:
+
+1. **Detected at intake, not at run time.** Each canvas on a request is checked
+   against the image model's capability envelope before a sandbox is created.
+   The operator is told which canvas cannot be produced and why, with the
+   arithmetic.
+2. **The other three are still delivered.** One impossible canvas does not fail
+   the request.
+3. **Never a silent crop.** Producing 728x90 from a 3:1 generation requires
+   cropping into a different aspect ratio, which invariant 2 forbids. That path
+   is available only as an explicit, operator-accepted deviation, flagged on the
+   request and recorded in `RESULT.json` and DECISIONS.md. It is never the
+   default and never happens quietly.
+
+The capability envelope lives in an `image_model_capabilities` row — edge cap,
+ratio cap, pixel range, divisor — not in code. When a model with wider support
+ships, that is a row change, and a fifth canvas size gets validated by the same
+generic arithmetic.
+
+This is the brief's own instruction taken literally: "If your sizing logic can't
+produce one of them, that's a finding — say so, rather than letting the request
+fail at run time."
 
 This compounds with Kahua's own rule: a fixed 48px h1 with "cut the copy, do
 not scale the type" cannot coexist with a logo and a CTA inside 90px of height.
@@ -340,8 +365,51 @@ agent with recording.
 A first generation is never the final asset. Every regeneration, every edit the
 next day, every concurrent run by the other customer is the same event.
 
-Concurrency: SQS plus a named cap on simultaneous sandboxes. More boxes
-horizontally; the request past the cap waits. No scheduler.
+### Concurrency and isolation
+
+Many sandboxes run at once. Two customers can be mid-edit simultaneously and
+neither waits for the other. The unit of isolation is **the run, not the
+tenant.**
+
+This matters, and the distinction is the difference between passing and being
+disqualified. A per-tenant box — "the Emplifi box" — is a named disqualifier,
+and it is also weaker: the horrifying test case has Emplifi running two tasks at
+the same time, and under per-tenant boxes those two share one box and can cross.
+
+| | Per-tenant boxes | Per-run boxes |
+|---|---|---|
+| Two customers at once | Yes | Yes |
+| Two runs from one customer at once | Share a box, can cross | Isolated |
+| Box identity | Names the tenant, disqualified | Opaque run id |
+| A new brand | Needs a new box definition | Works untouched |
+
+Nothing about a sandbox — name, template, tags, environment — records which
+tenant or task it serves. Concurrency comes from SQS plus a named cap on
+simultaneous sandboxes: more boxes horizontally, and the request past the cap
+waits. No scheduler.
+
+### Graceful exit
+
+A run ends by the agent's own action, never by the backend reaching into the
+box.
+
+1. The agent finishes and ACKs every artifact.
+2. The agent calls `finish_run`, its final tool call, moving run state to
+   `completed`.
+3. The backend observes the state change and kills the sandbox.
+
+The front end also offers an explicit **Save & exit**. It sends a wrap-up
+message into the agent's live session rather than instructing the backend to
+collect anything: the agent flushes outstanding work, ACKs it, and calls
+`finish_run` itself. The `Stop` hook already refuses to let the agent finish
+while an artifact is unsaved.
+
+If the agent does not respond within a deadline, the backend kills the sandbox
+anyway and marks the run `interrupted`. That is safe because every ACKed
+artifact is already durable, and it never involves reading the box.
+
+Killing a sandbox is not moving work out of it. Reading its filesystem is. No
+button, timeout, or teardown path does the second thing.
 
 Resume: kill the box, spin a new one, rehydrate from S3 and RDS, and the agent
 picks up as though the files were never deleted. It should never know.
