@@ -881,231 +881,341 @@ demonstration, which is why they carry hard failures rather than warnings.
 
 ## Roadmap
 
-Sequential. Each stage names what it uses, why that choice, and what proves it
-before the next begins.
+### Why this order
 
-### Where each stage lands
+Five constraints fix the sequence. Every one of them is a real dependency, not a
+preference, which is why the stages cannot be shuffled:
+
+1. **The evaluation layer precedes what it grades.** It is already built, which is
+   why Gate 0 can be judged rather than eyeballed.
+2. **Nothing touches a sandbox until the skill is boring.** The brief makes this a
+   gate: skip it and a later failure is indistinguishable between a database
+   problem, a skill problem, a hydration problem and a resume problem.
+3. **Infrastructure exists before the pipeline that deploys to it.** Otherwise the
+   pipeline gets built twice.
+4. **A brand exists before a run can pull one.** Ingest is not optional plumbing;
+   it is the precondition for every run and the whole of the third-brand test.
+5. **Deploy is an automatic disqualifier**, so it is scheduled as a deadline with
+   room in front of it, never as a finish.
+
+### Precondition — the evaluation layer *(done)*
+
+Not a stage, because it grades all of them. **144 tests, no browser, no image
+model, no AWS**: the capability envelope, brain loading, the ingest planner, the
+render checks, the disqualifier scanners, and every case where input resists being
+read. Each detector is shown catching a planted violation, and a third check
+outcome — `unverifiable` — exists so a check that cannot run never reads as
+success.
+
+It was built first on purpose. Gate 0's success criterion is "these checks pass
+against real output", which is only meaningful if the checks already exist.
+
+---
+
+### The architecture, and why each piece is there
 
 Bracketed numbers are the stage that builds that piece.
 
 ```
-                          operator's browser
-                                  │  HTTPS
-                                  ▼
-    [3] CloudFront ──── VPC origin ────▶ [3] internal ALB
-                                                  │
-                                                  ▼
-                                    ┌──────────────────────────────┐
-                                    │  [3] EC2 · private subnets   │
-                                    │      Next.js                 │
-                                    │      React front end + API   │
-                                    │      [4] deployed by SSM     │
-                                    │      [5] brain ingest        │
-                                    │      [8] chat surface        │
-                                    └──────────────────────────────┘
-                                       │                    │
-                        ┌──────────────┘                    └───────────────┐
-                        ▼                                                   ▼
-        ┌────────────────────────────┐                     ┌────────────────────────────┐
-        │  [3] RDS Postgres          │                     │  [3] S3                    │
-        │      isolated subnets      │                     │      cq-brains   [5]       │
-        │      runs · revisions      │                     │      cq-work     [6]       │
-        │      messages · artifacts  │                     │      cq-tfstate  [2]       │
-        │      runs table = queue [7]│                     └────────────────────────────┘
-        └────────────────────────────┘                          ▲            ▲
-                                                                │            │
-                        │  [6] create box + write HYDRATION.md  │            │
-                        ▼                                       │            │
-    ╔═══════════════════════════════════════════════════╗       │            │
-    ║  [6] E2B sandbox — one per run, OUTSIDE the VPC   ║       │            │
-    ║      boots holding only an opaque run id          ║       │            │
-    ║                                                   ║       │            │
-    ║      Claude Agent SDK                             ║       │            │
-    ║      [0] skill · plate call · overlay · render    ║───────┘  write-    │
-    ║      [9] Playwright browser + recording           ║   through + verify │
-    ║                                                   ║                    │
-    ║      pulls the brain FRESH every run ─────────────╫────────────────────┘
-    ╚═══════════════════════════════════════════════════╝
-                        │
-                        └──▶ ACK each artifact · finish_run
-                             via CloudFront, per-run token  [6]
+                              operator's browser
+                                      │
+                                      │  HTTPS · the only public entry
+                                      ▼
+┌───────────────────────────────────────────────────────────────────────────┐
+│ [3] CloudFront                                                            │
+│                                                                           │
+│ why  · the single public door — and the path the sandbox ACKs             │
+│        through, because it sits off-AWS and the ALB is private            │
+│ fits · nothing else is publicly reachable, so "everything in the          │
+│        VPC" holds for the whole control plane                             │
+└───────────────────────────────────────────────────────────────────────────┘
+                                      │  VPC origin
+                                      ▼
+┌───────────────────────────────────────────────────────────────────────────┐
+│ [3] internal ALB                                                          │
+│                                                                           │
+│ why  · a health check nothing else provides — a 503 during an             │
+│        in-place restart instead of a refused connection                   │
+│ fits · kept where the queue was dropped: unlike SQS it duplicates         │
+│        nothing another component already does                             │
+└───────────────────────────────────────────────────────────────────────────┘
+                                      ▼
+┌───────────────────────────────────────────────────────────────────────────┐
+│ [3] EC2 · private subnets · Next.js                                       │
+│     React front end + API together                                        │
+│     [4] deployed by SSM   [5] brain ingest   [9] chat surface             │
+│                                                                           │
+│ why  · React is required by the brief; Next puts the API on the           │
+│        same box, so one deploy target instead of two                      │
+│ fits · NEVER runs an agent. Enforced by having no agent runtime           │
+│        installed and a DB constraint requiring a sandbox id, not          │
+│        by discipline. That is disqualifier 3.                             │
+└───────────────────────────────────────────────────────────────────────────┘
+              │                                        │
+              ▼                                        ▼
+┌──────────────────────────────────┐   ┌──────────────────────────────────┐
+│ [3] RDS Postgres                 │   │ [3] S3 · versioned               │
+│     isolated subnets             │   │     cq-brains   [5]              │
+│     runs · revisions             │   │     cq-work     [6]              │
+│     messages · artifacts         │   │     cq-tfstate  [2]              │
+│     brand state                  │   │                                  │
+│     [8] the runs table           │   │                                  │
+│         IS the queue             │   │                                  │
+│                                  │   │                                  │
+│ why  · state and queue in        │   │ why  · the file system the       │
+│   one place; SKIP LOCKED         │   │   whole design rests on          │
+│   gives the cap for free         │   │ fits · key = relative path,      │
+│ fits · no second source of       │   │   so resume is a sync and        │
+│   truth about what is            │   │   the bucket is browsable        │
+│   pending                        │   │                                  │
+└──────────────────────────────────┘   └──────────────────────────────────┘
+              │
+              │  [6] create box · write HYDRATION.md in
+              ▼
+╔═══════════════════════════════════════════════════════════════════════════╗
+║ [6] E2B sandbox · ONE PER RUN · outside the VPC                           ║
+║     boots holding only an opaque run id                                   ║
+║     Claude Agent SDK  ·  [0] skill, plate, overlay, render                ║
+║     [10] Playwright browser + recording                                   ║
+║                                                                           ║
+║ why  · a plain sandbox provider rather than a managed-agent               ║
+║        platform, which the brief warns costs you day two                  ║
+║ fits · the agent cannot live where the backend lives —                    ║
+║        structurally, not by policy. No box identity names a               ║
+║        tenant or a task, so no brand can leak through identity.           ║
+╚═══════════════════════════════════════════════════════════════════════════╝
+        │                      │                        │
+        │ write-through        │ ACK + finish_run       │ model and
+        │ scoped STS, own      │ via CloudFront, with   │ browser
+        │ prefix only          │ a per-run token        │ calls
+        ▼                      ▼                        ▼
+   S3, its own prefix     EC2 API                  OpenAI · Anthropic
+                                                   · Adstream
 
-    ✗ NEVER: backend reads the box · syncs an out-dir · runs the agent locally
+   ✗ NEVER · the backend reading the box · syncing an out-directory ·
+             spawning the agent locally. Each is a listed disqualifier.
 
-    [1]  evaluation layer + CI ......... grades every stage above
-    [2]  tfstate + OIDC bootstrap ...... prerequisite for [3] and [4]
-    [10] evidence ...................... leak · kill · interleave · third brand
+   [1]  CI automates the checks ..... the eval layer is a precondition
+   [7]  sandbox evaluation layer .... what only a live box can prove
+   [11] evidence .................... leak · kill · interleave · third brand
 ```
 
-Two things the picture is meant to make obvious. Every arrow leaving the sandbox
-is the agent's own action, and the sandbox sits outside the VPC on purpose —
-that separation is what keeps the agent from living where the backend lives.
+---
 
-### Everything we are using, and why
+### Stage 0 — Gate 0: ads worth defending *(next)*
 
-| Layer | Choice | Why this one |
-|---|---|---|
-| Language | TypeScript on Node 22 | One language across front end, API, sandbox tooling and tests; no context switch under time pressure |
-| Front end + API | Next.js on EC2 | React is required; Next puts the API on the same box, which is one deploy target instead of two |
-| Database | RDS Postgres | Requests, revisions, messages, artifacts, brand state. Also the queue, via `FOR UPDATE SKIP LOCKED` |
-| Queue | The `runs` table | A queue service would duplicate what the table and provider liveness already do, and create a second source of truth |
-| Object store | S3 | Brains, run outputs, transcripts, recordings, Terraform state. Versioning on |
-| Edge | CloudFront → VPC origin → internal ALB | Keeps the load balancer private; also the route the sandbox uses to ACK |
-| Sandbox | E2B, one per run | A plain provider rather than a managed-agent platform. Off-box by construction, which satisfies the co-location constraint structurally |
-| Agent | Claude Agent SDK, in-sandbox | Custom tools on an in-process MCP server, plus hooks for durability enforcement |
-| Image model | gpt-image-2 | Required. Wrapped as a tool so the size arithmetic is deterministic and the aesthetic judgement stays with the model |
-| Render + browser | Playwright, in-sandbox | HTML to PNG and the deploy browser are the same dependency, so one template covers both |
-| Save-out | `save_work` script in the box | The agent saves its own work. A plain executable is inspectable by hand inside the box, which is how it gets debugged |
-| Secrets | Secrets Manager → scoped STS | Agent gets a session limited to one run prefix; blast radius is one prefix |
-| Deploy transport | SSM Run Command | EC2 has no public IP, so there is nothing to SSH to |
-| Registry | ECR + Parameter Store | Image tags are git SHAs; the E2B template id is a parameter, so a rebuild needs no code change |
-| IaC | Terraform ≥ 1.11, S3 backend | `use_lockfile` gives native state locking with no DynamoDB table |
-| CI/CD | GitHub Actions + OIDC | No long-lived AWS keys in the repo |
-| Tests | Vitest + pngjs | No native dependencies, no browser needed for the check library, sub-second runs |
+**Purpose.** Prove the skill produces work a customer would accept, locally,
+before any infrastructure exists to blame.
 
-### Transcripts
+**Do**
+1. Resolve and record the brand data — one value per conflict, and the class-2
+   answers for the missing reverse logo and the missing condensed face.
+2. Build the plate call: target canvas → legal gpt-image-2 size → generate →
+   uniform downscale → exact-dimension output.
+3. Build the overlay: one fixed canvas root, positioned text, logo at natural
+   proportions, `data-cq-role` attributes, `@font-face` with `file://` sources.
+4. Render to PNG at exact canvas bounds.
+5. **Look at it.** Headline legible across the room, copy on quiet ground, logo
+   surviving its background, CTA obviously the thing to click.
+6. Twenty ads across both brands and every producible size.
 
-Exported at the end of the day or overnight, raw and untidied, dead ends
-included. Tracked here because missing transcripts are the single most automatic
-disqualifier — code without them cannot be graded at all — so it is a deliverable
-with a deadline rather than a stage with a sequence position.
+**Why here.** It needs no AWS, so it costs the infrastructure work nothing, and
+everything downstream is undebuggable until this is dull.
 
-### Stage 0 — Gate 0 *(next)*
+**Done when** the evaluation layer passes against real renders rather than
+fixtures, and the ads are ones we would defend out loud.
 
-No infrastructure. The brief makes this a gate: nothing touches a sandbox until
-the skill reliably makes ads worth defending, because everything downstream is
-undebuggable until this part is boring.
+---
 
-**Prerequisites**
+### Stage 1 — Automate the checks
 
-| Need | State |
-|---|---|
-| Source packet extracted to `packet/` | ✅ `cd eval && npm run unpack` |
-| Canvas planner, brain loader, ingest planner, render checks | ✅ built, 130 tests |
-| `OPENAI_API_KEY` in `.env` | ⛔ **blocks the plate call** |
-| Playwright browser installed locally | ⛔ one command, ~300 MB |
-| Claude Code or Codex to drive the skill | Existing subscription |
+**Purpose.** Make the evaluation layer run without anyone remembering to.
 
-`.env` is gitignored; `.env.example` documents the variables. No AWS account,
-no E2B key, and no Adstream credentials are needed for this stage.
+**Do.** GitHub Actions on pull request: typecheck, lint, the full suite, and the
+tenant-name grep.
 
-- Resolve and record every brand conflict — the h1 value, the font substitution,
-  the missing reverse logo, the token-cache disagreements.
-- Plate call: target canvas → legal gpt-image-2 size → generate → uniform
-  downscale → exact-dimension output.
-- Overlay: one fixed canvas root, positioned text, logo at natural proportions,
-  `data-cq-role` attributes.
-- Render to PNG and **look at it**. Headline legible across the room, copy on
-  quiet ground, logo surviving its background, CTA obviously the thing to click.
-- Twenty ads across both brands and every producible size. Email a few.
+**Why here.** Roughly half an hour, and from this point every later stage is
+graded on the way in rather than at the end.
 
-*Tech:* TypeScript, gpt-image-2, Playwright locally.
-*Why local:* skill development is not a product code path, and this needs no AWS,
-so it costs the infrastructure work nothing.
-*Proven by:* PNGs worth defending, and the eval layer's checks passing against
-them rather than against fixtures.
+**Done when** a pull request that introduces a tenant name into source fails.
 
-### Stage 1 — Evaluation layer and CI *(evaluation layer done)*
+---
 
-The eval layer already exists: 130 tests, no browser, no image model, no AWS —
-disqualifier scanners, the render check library, the capability envelope, and the
-ingest planner, every detector shown catching a planted violation.
+### Stage 2 — Terraform bootstrap, by hand, once
 
-Remaining: wire it to GitHub Actions on pull request — typecheck, lint, tests,
-and the tenant-name grep.
+**Purpose.** Create the two things Terraform cannot create for itself.
 
-*Tech:* Vitest, pngjs, GitHub Actions.
-*Why first:* it grades every later stage, and it costs about half an hour to wire.
-*Proven by:* check 10, and by neutering a detector and watching tests fail.
+**Do.** State bucket with versioning and `use_lockfile = true`; GitHub OIDC
+provider; a deploy role whose trust policy is scoped to this repository and ref.
 
-### Stage 2 — Terraform bootstrap
+**Why here.** Terraform cannot provision the bucket that holds its own state, and
+no AWS keys should ever sit in the repository, so OIDC has to exist before any
+pipeline does.
 
-By hand, exactly once: state bucket with versioning and `use_lockfile`; GitHub
-OIDC provider; deploy role scoped to this repository and ref.
+**Done when** two concurrent plans produce a lock error, and the trust policy
+names this repo and no other.
 
-*Why by hand:* the state bucket cannot be created by the Terraform that stores
-its state in it.
-*Proven by:* checks 8 and 9.
+---
 
-### Stage 3 — Terraform full stack, one apply
+### Stage 3 — Terraform the whole stack, one apply
 
-VPC across two AZs, public subnets for NAT, private app subnets, isolated
-database subnets, NAT gateway, S3 gateway endpoint, interface endpoints including
-the three SSM ones, RDS, buckets, internal ALB, EC2 with the SSM instance
-profile, CloudFront with a VPC origin and two cache behaviours, Secrets Manager,
-IAM roles.
+**Purpose.** Stand up everything a run will need, in one shot.
 
-*Why one apply:* a delivery pipeline needs its whole target to exist; phasing
-would mean building the pipeline twice.
-*Proven by:* check 6 — a request through the distribution reaching the app.
+**Do.** VPC across two AZs · public subnets for NAT · private app subnets ·
+isolated database subnets · NAT gateway · S3 gateway endpoint · interface
+endpoints including `ssm`, `ssmmessages` and `ec2messages` · RDS Postgres ·
+buckets · internal ALB · EC2 with the SSM instance profile · CloudFront with a VPC
+origin and two cache behaviours · Secrets Manager · IAM roles.
+
+**Why here.** A delivery pipeline needs its whole target to exist; phasing the
+infrastructure means building the pipeline twice.
+
+**Done when** a request through the distribution reaches the application — which
+proves the VPC origin, the ALB security group and the private subnet routing all
+at once.
+
+---
 
 ### Stage 4 — Delivery pipelines
 
-App: build, tag with the git SHA, push to ECR, SSM Run Command to pull and
-restart. Sandbox template: `e2b template build` on `sandbox/` changes, id to
-Parameter Store.
+**Purpose.** Make every subsequent change ship in one push.
 
-*Why now:* every stage after this deploys in one push.
-*Proven by:* check 3 — SSM returns the instance before the pipeline is trusted.
+**Do.** *App:* build, tag with the git SHA, push to ECR, SSM Run Command to pull
+and restart. *Sandbox template:* `e2b template build` on changes under `sandbox/`,
+writing the new template id to Parameter Store.
+
+**Why here.** Everything after this is iterative, and hand-deploying it would tax
+every stage that follows. SSM rather than SSH because EC2 has no public IP.
+
+**Done when** `describe-instance-information` returns the instance and a merge to
+`main` lands on the box unattended.
+
+---
 
 ### Stage 5 — Brain ingest
 
-Upload a brain from the front end or the CLI, store every object under its kit
-prefix, write the kit, asset and font rows, show the findings report. Adding
-assets to an existing kit is the same path.
+**Purpose.** Give a brand a way into the system.
 
-*Tech:* `planIngest` (already built and tested), S3, RDS.
-*Why here:* nothing downstream can run without a brand in the database, and the
-third-brand test is this path plus a task.
-*Proven by:* ingesting a brand that exists nowhere in the packet.
+**Do.** Upload a brain from the front end or the CLI. Store every object at
+`<kit-id>/<path within the brain>`, write the kit, asset and font rows, and show
+the findings report before committing. Adding assets to an existing kit is the
+same path.
 
-### Stage 6 — One real run, end to end
+**Why here.** No run can pull a brain that was never loaded, and this path *is*
+the third-brand test — the day-two brain is this stage plus a task.
 
-Render a hydration file from rows, write it into a box, pull a brain fresh,
-generate, save through the ACK path, kill the box.
+**Done when** a brand that exists nowhere in the packet ingests with no code
+change, and the findings report names what it could not reconcile.
 
-*Proven by:* checks 1, 5 and 7 — fonts not falling back, an ACK from outside the
-VPC, and presigned URLs outliving a slow run.
+---
 
-### Stage 7 — The engine
+### Stage 6 — One real sandbox run, end to end
 
-Concurrency to the named cap, resume after a kill, retry after a crash, partial
-saves, soft delete, re-run.
+**Purpose.** Prove the hydration path with a live box, once, before building
+anything on top of it.
 
-*Why this is graded hardest:* every regeneration and every edit is the same
-event, and this is where hydration either holds or leaks.
-*Proven by:* killing a box mid-run and watching **a new box** rehydrate and
-continue — the resume path is always a fresh box, never a revived one.
+**Do.** Render a hydration file from rows · create a box carrying only an opaque
+run id · write `HYDRATION.md` in · pull the brain fresh · generate · save through
+`save_work` and ACK each artifact · `finish_run` · kill the box.
 
-### Stage 8 — Chat surface
+**Why here.** Every later stage is a variation on this event. Debugging it once, in
+isolation, is far cheaper than debugging it inside concurrency.
 
-A message reaching the agent attached to the right tenant, task and revision, and
-the updated asset returning with no manual step in between.
+**Done when** fonts do not silently fall back, an ACK arrives from outside the
+VPC, and presigned URLs outlive a deliberately slow run.
 
-*Why chat over pins:* the graded part is whether the message hydrates correctly,
-which is identical either way, and the hours saved go to deploy.
-*Proven by:* a round trip with nothing touched in the middle.
+---
 
-### Stage 9 — Deploy *(automatic disqualifier if unfinished)*
+### Stage 7 — Sandbox evaluation layer
 
-Agent-driven computer use against Adstream, recording saved, detail page read
-back as the only place the truth lives.
+**Purpose.** Extend the evaluation layer to things only a live box can prove. The
+local suite cannot reach any of this, and the stages after it are exactly where
+quiet failures hide.
 
-*Why agent-driven:* the graded test is resilience to a UI change, so Playwright
-actuates and the agent decides from each screenshot. A selector script is a named
-road bump.
-*Proven by:* check 4 — a deploy run cannot complete without a recording artifact.
-*Sequencing:* a deadline, not a finish. Anything that eats hours without earning
-points is a live risk to this stage.
+**Do.** Build the harness and the first tests against real boxes:
+- **Hydration fidelity** — what landed in `/work` matches what the hydration file
+  named, digest for digest, and nothing else arrived.
+- **Isolation** — a box's environment carries no tenant or kit string; its
+  credentials cannot read another revision's prefix. Assert the *denial*, not just
+  the permission.
+- **Tree mirroring** — every saved object's key equals its path relative to
+  `/work`, so rehydration is a sync.
+- **Font provenance in a real render** — computed `font-family` on every text node
+  came from the brain. This is the check that fails silently otherwise.
+- **Save durability** — kill a box mid-run and assert every ACKed artifact is
+  intact and every unverified one is absent.
 
-### Stage 10 — Evidence
+**Why here.** The same reason the local layer came before Gate 0: the harness has
+to exist before the stages it grades. Written now, it catches the engine, the chat
+surface and deploy as they land, instead of after.
 
-Plant a leak and catch it. Kill a box and resume. Run the interleaved concurrent
-case with different inspirations in flight. Take a third brain through untouched.
+**Done when** each of those has a test that fails when deliberately broken — a
+weakened credential policy, a mangled hydration file, a font left out of
+fontconfig.
 
-*Why last and why explicit:* a green check is not evidence. A detector that has
-never fired looks exactly like success, so each one is shown catching something
-real.
+---
+
+### Stage 8 — The engine
+
+**Purpose.** The part graded hardest: many runs, arbitrary order, nothing crossing.
+
+**Do.** Concurrency to the named cap via `FOR UPDATE SKIP LOCKED` · resume as a
+fresh box rehydrating from the tree · retry reusing verified artifacts · partial
+saves · soft delete · re-run regenerating from scratch.
+
+**Why here.** It needs one proven run underneath it and a harness above it.
+
+**Done when** a box killed mid-run is replaced by a new one that continues, and a
+retry re-bills no successful image call.
+
+---
+
+### Stage 9 — Chat surface
+
+**Purpose.** Let a human say what is wrong and have it reach the right agent.
+
+**Do.** A message against a named revision becomes a row, hydrates into a new
+run's file, reaches the agent with the right tenant, task and revision, and the
+updated asset returns.
+
+**Why here.** It is the first thing that needs the engine's revision lineage to
+already work.
+
+**Done when** a message round-trips with nothing touched in between.
+
+---
+
+### Stage 10 — Deploy *(automatic disqualifier if unfinished)*
+
+**Purpose.** Land the ad in the marketing tool and verify it actually landed.
+
+**Do.** Agent-driven computer use against Adstream — Playwright actuates, the
+agent decides from each screenshot. Handle the normalised name, the conditionally
+disabled Next button, the two-to-nine-second publish, and the toast that outlives
+its page. Save the recording. Read the detail page back.
+
+**Why here.** It reuses the same box, the same tree and the same save path, so it
+is small by the time we arrive — and it is scheduled with room in front of it
+because arriving late is a disqualifier.
+
+**Done when** a deploy fired from the front end ends on a verified detail page
+with a recording, and a run without a recording artifact cannot reach
+`completed`.
+
+---
+
+### Stage 11 — Evidence
+
+**Purpose.** Make the claims checkable by someone who does not trust them.
+
+**Do.** Plant a leak and catch it, then weaken the filter and watch the same check
+fail · kill a box and resume · run the interleaved concurrent case with different
+inspirations in flight · take a third brain through new-task-then-edit untouched.
+
+**Why here.** It is the only stage that needs everything else finished.
+
+**Done when** each demonstration has been performed and recorded, including the
+ones where a detector was deliberately broken to prove it can see.
 
 ## The engine
 
