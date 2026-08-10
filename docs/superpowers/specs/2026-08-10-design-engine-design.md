@@ -46,6 +46,8 @@ treatment reference only; the agent never claims publication.
 | Database | RDS Postgres, isolated subnets |
 | Object store | S3 — brains, run outputs, Terraform state |
 | Sandboxes | E2B, one per run, off-AWS |
+| Agent runtime | Claude Agent SDK inside the sandbox |
+| Image model | gpt-image-2, wrapped as an SDK custom tool |
 | Queue | SQS job queue + DLQ |
 | Secrets | Secrets Manager, agent gets scoped STS sessions |
 | IaC | Terraform, S3 backend with `use_lockfile = true` |
@@ -80,6 +82,53 @@ design exists to prevent.
 Asset resolution filters on `brand_kit_id`, never on the folder a file happens
 to sit in.
 
+### The hydration file
+
+One file per run, `HYDRATION.md`: YAML frontmatter carrying machine-checkable
+run data, Markdown body carrying the prompt. It holds references and
+instructions, never payloads — the brain, fonts, logos, inspirations and parent
+artifacts arrive as presigned URLs with digests, which is what keeps "pulled
+fresh every run" true.
+
+Every field is a projection of a row. `brand.*` comes from `brand_kits` joined
+to `brand_assets` on the run's kit; `job.canvases[]` from `request_canvases`, so
+a fifth canvas size needs no code; `policy.*` from a global `policies` table
+rather than per-customer branches. A brand inserted for the first time renders a
+valid file immediately, which is how the third-brand test passes by
+construction.
+
+The rendered file is persisted to S3 as the run's replayable recipe, which makes
+resume a replay rather than a reconstruction.
+
+### Edit awareness
+
+The file states plainly whether the run is an edit, and carries the facts an
+edit needs:
+
+```yaml
+run:
+  kind: edit
+edit:
+  parent_revision: 3
+  new_revision: 4
+  copy_diff: {headline: {from: "...", to: "..."}}   # {} when copy is unchanged
+  parent_artifacts: [{canvas: portrait, kind: plate, url: "...", sha256: "..."}]
+comments:
+  - {id: cm_01, canvas: portrait, region: {x: 78, y: 640, width: 604, height: 214}, body: "..."}
+resume:
+  already_durable: [{canvas: portrait, kind: plate, sha256: "...", url: "..."}]
+```
+
+These are **facts, not instructions**. The file says which copy fields differ,
+which pins exist and where, and which parent artifacts are available for reuse.
+It does not say whether to retypeset text or regenerate the plate — that is the
+model's call, and the brief is explicit that no classifier gets built for it.
+
+`resume.already_durable[]` is the one entry that *is* binding: anything listed
+there has been verified in durable storage and must not be regenerated. That is
+what makes a resumed run cheap and what stops a retry re-billing an image call
+that already succeeded.
+
 ## Save-out
 
 The agent moves its own work. Nothing else does.
@@ -97,6 +146,41 @@ The agent moves its own work. Nothing else does.
 
 The backend reads S3. It never reads the box. Saving work is not publishing,
 and reading durable storage is not reaching into a sandbox.
+
+There is no terminal manifest. Completion is a state transition in RDS driven
+by the last ACK, so no single file can strand a run's output.
+
+### Surviving abrupt closure
+
+E2B kills sandbox commands with SIGKILL, so no graceful signal arrives and no
+exit handler is guaranteed to run. Any design that flushes work "on shutdown"
+would lose data. Durability therefore has to be continuous, which is why
+write-through is the primary path rather than a convenience.
+
+Five layers, in order of what they protect:
+
+1. **Save before return.** `generate_plate` uploads and ACKs the plate before
+   handing it back to the model. The image call is billed the moment it
+   succeeds, so the artifact is durable before the agent has even seen it. A box
+   that dies one second later loses nothing billable.
+2. **`PostToolUse` hook** checkpoints the working directory after each expensive
+   step, capturing intermediate state that is not itself a deliverable — a
+   half-built HTML project, a downloaded parent plate.
+3. **`Stop` hook** blocks the agent from ending while any artifact is unsaved,
+   returning `decision: "block"` so the run cannot finish quietly incomplete.
+4. **`PreCompact` hook** archives the full transcript before the SDK summarises
+   it, so long runs keep their history.
+5. **Heartbeat.** If it stops, the backend marks the run `interrupted`.
+   Everything already ACKed is reused on retry; anything unverified is
+   regenerated.
+
+E2B's own `lifecycle.onTimeout: "pause"` is configured as a soft landing, so a
+timeout preserves filesystem and memory instead of destroying them, and resume
+costs about a second. It is deliberately **not** the durability mechanism: it
+covers timeout but not `kill()` or infrastructure failure, and there is a
+reported issue where filesystem changes stop persisting after the second
+resume. Pause/resume is treated as a speed optimisation for the resume path,
+never as the thing that keeps work safe.
 
 ## Brand data resolution
 
@@ -143,13 +227,82 @@ Required: 1080x1080, 1200x628, 1080x1350, 728x90. Four sizes means four
 separately generated plates, each at exact target dimensions, never cropped or
 re-framed.
 
+### gpt-image-2 cannot emit any of the four natively
+
+Per the OpenAI image generation guide, a custom size must satisfy all of:
+
+- both edges multiples of 16px
+- long-edge to short-edge ratio no greater than 3:1
+- total pixels between 655,360 and 8,294,400
+- maximum edge no greater than 3840px
+
+Every required canvas fails the multiple-of-16 rule, so none can be requested
+directly. Three are recoverable; one is not.
+
+| Target | Aspect | Generate at | Result |
+|---|---|---|---|
+| 1080x1080 | 1:1 | 1088x1088 | Uniform downscale x0.992647. Aspect exact. |
+| 1080x1350 | 4:5 | 1088x1360 | Uniform downscale x0.992647. Aspect exact. |
+| 1200x628 | 300:157 | 3088x1616 | No valid size has this aspect exactly. Closest is 0.0033% off — 0.02px across the full width, which rounds away. |
+| 728x90 | 364:45 | **impossible** | 8.09:1 exceeds the 3:1 limit, and 65,520px is below the 655,360 minimum. |
+
+Plates are always generated **above** target and downscaled, never upscaled.
+Downscaling preserves detail; upscaling invents it.
+
+The 300:157 case is worth stating precisely: because 157 is prime, an exact
+match needs 4800x2512, which breaches the 3840px edge limit. The residual
+0.0033% anisotropy is two hundredths of a pixel and is the honest cost of the
+constraint. It is recorded rather than hidden.
+
+### The leaderboard is a hard finding
+
+728x90 cannot be produced by gpt-image-2 by any route. Outpainting does not
+help, because the 3:1 ceiling constrains the *requested output size*, so no
+edit call can return an 8:1 image either. Filling a 728x90 canvas from a
+generated plate would require cropping or stretching, both forbidden by
+SKILL.md invariant 2.
+
+The run therefore reports the arithmetic and escalates rather than failing at
+request time, which is what the brief asks for. If a leaderboard plate is
+genuinely required, the documented fallback is a second image model without an
+aspect-ratio ceiling — a deviation recorded in DECISIONS.md, not a silent crop.
+
+This compounds with Kahua's own rule: a fixed 48px h1 with "cut the copy, do
+not scale the type" cannot coexist with a logo and a CTA inside 90px of height.
+Two independent reasons the leaderboard is the canvas that does not work.
+
 Inspirations are 1200x1200, 600x200, 1080x1080, 1200x1280 — no inspiration
 matches a target canvas, which reinforces that plates are generated, not
 adapted.
 
-**728x90 for Kahua is a finding, not a bug.** A fixed 48px h1 with "cut the
-copy, do not scale the type" cannot coexist with a logo and a CTA inside 90px
-of height. This is reported up front rather than failing at run time.
+Note also that gpt-image-2 does not support transparent backgrounds. This costs
+nothing here: plates are full-bleed by definition, and logos are placed from
+the brain's own SVG files.
+
+## Sandbox runtime
+
+Inside each E2B sandbox, a Claude Agent SDK process runs the job. The image
+model is not called by the model directly; it is wrapped as a custom tool on an
+in-process SDK MCP server, registered through `mcpServers` and pre-approved in
+`allowedTools` as `mcp__design__*`.
+
+| Tool | Responsibility |
+|---|---|
+| `generate_plate` | Maps target canvas to a legal gpt-image-2 size, generates, downscales uniformly, **saves and ACKs before returning**, and returns the plate as an image block so the model sees it |
+| `render_canvas` | Playwright renders the HTML overlay to PNG at exact canvas bounds |
+| `look_at_render` | Returns the rendered PNG as an image block for the mandatory visual judgement |
+| `save_artifact` | Uploads, verifies, ACKs, and returns any rejection as text the model can act on |
+
+The split follows the brief's rule about where checks belong. The size
+arithmetic has exact answers, so software owns it and the tool refuses an
+impossible canvas with the numbers in the error message. Whether the ad is any
+good has no exact answer, so the model owns it by looking at the render.
+Returning images as content blocks is what makes "look at what you made"
+a real step rather than a claim.
+
+Tool handlers return `isError: true` with composed messages rather than raw
+exceptions, so a failure arrives as something the agent can read and act on
+within the same run.
 
 ## Terraform
 
