@@ -1,0 +1,277 @@
+
+
+
+    
+    Work trial: the design engine
+
+    Two days, in person, and this is sized to finish. Four parts. People who’ve run it get through all four, so plan to.
+
+    You’re building a small version of what CharacterQuilt actually is: an agent that takes a customer’s brand, generates a designed asset, lets a human iterate on it, and pushes it into the customer’s marketing tool.
+
+    You’ll also hear me talk. I’ll give you the recording. Everything I say out loud that isn’t in this document is still part of the spec.
+
+    
+    What you’ve got
+
+    SKILL.md is our real generation skill, cut down to ads. It’s the contract for what a good asset looks like. No code in it. Everything it describes, you build.
+
+    design-brains.zip is two customers, Kahua and Emplifi: DESIGN.md, fonts, a brand token export, an asset manifest.
+
+    inspirations.zip is reference designs. They’re deliberately not inside either brain.
+
+    starter/ is two example request payloads — one new job, one edit with pinned comments — and a README that says what it deliberately doesn’t contain. It’s input data, not a starting point.
+
+    The brand data isn’t internally consistent. Finding that is part of the job. Fixing it is not: pick a value, set everything to it, write down what you picked, move on. I don’t care which one you pick. I care that you noticed, and that you didn’t spend an afternoon building machinery to adjudicate it.
+
+    
+    
+    The one idea
+
+    Everything is a file system. Files and skills, hydrated in different orders at different times. That’s the whole company. Our production AGENTS.md is one line, and this is the line. If you’re about to build something and it deviates from this, you’re not allowed to build it. That’s not a style preference.
+
+    “Hydrated” means: a clean box spins up, the right files get put in, an agent gets a prompt, and it goes. Imagine SSHing into the box, typing claude, pasting the prompt, and walking away. Everything you build is either getting the right files into a box or getting the work back out of one.
+
+    Hydration and storage are 99% of where you should pay your time. If you get the storage right, everything else falls out of it. If you get it wrong, nothing else matters.
+
+    Getting the work back out is the agent’s job. The box is deleted the moment the run ends, so the model has to save its own work somewhere durable before that happens. How it saves is yours to design. That it saves is not. And when a save is bad, it fails loudly, in words the agent can read and fix in the same run — not in a way a human discovers on Thursday.
+
+    One clarification, because the skill file will tempt you: SKILL.md says the agent never publishes and the root worker owns publishing. That’s about the agent not claiming an ad went live. It is not permission for your backend to go into the box and carry files out. Saving work is not publishing.
+
+    
+    
+    Disqualifiers
+
+    Any one of these ends the trial, regardless of how good everything else is.
+
+    Anything other than the agent moves work out of the box. A backend that collects files from the sandbox, syncs an out-directory, or reads the box’s filesystem after the run: no.
+
+    A Kahua box and an Emplifi box. Any box whose identity says which tenant or task it serves.
+
+    Your backend launching the agent as a subprocess on its own box. The EC2 server that pulls a job and spawns Claude Code next to your API. Queues are fine; the agent living where your backend lives is not.
+
+    Any agent run on your laptop. Especially the deploy one.
+
+    Work that exists only on a box. If I kill the box mid-task and you can’t get back, the state lived in the wrong place.
+
+    A hardcoded ordering. If your system needs requests to arrive in a friendly order, it doesn’t work.
+
+    
+    
+    The shape of it
+
+    Three pieces, none of them big.
+
+    A React front end. Shows the asset, gives a human one way to say what’s wrong with it.
+
+    A backend. Requests, revisions, comments, assets, brand state.
+
+    Agents in sandboxes. Generation and deployment are both agent work in a clean sandbox, one per run. They want different things (generation needs fonts, tokens and an image model; deployment needs a browser and credentials), so one image or two is your call.
+
+    Three operators hit generate at the same time. Nothing about that should be interesting: more boxes, horizontally, a cap you can name, and the fourth request waits. If you’re building a scheduler, you’re answering a question nobody asked.
+
+    Use whatever you’re fast in. We run Next.js, Python workers and Supabase, but I’m not testing whether you can guess our stack. Sandbox provider is your call too — E2B, Daytona, Modal, your own metal. I’d take a plain sandbox provider over the managed-agent platforms; those are software-contract-heavy and you’ll spend day two fighting them. Not the right time to learn something new.
+
+    
+    
+    Order of operations
+
+    Nothing touches a sandbox until the skill runs locally, in your own Claude Code or Codex, and reliably makes on-brand ads for both brands. If you skip this gate and something breaks later, you won’t be able to tell whether it’s a database problem, a skill problem, a hydration problem or a resume problem, and you’ll never get across the start line.
+
+    You’re past the gate when you can ask for twenty ads for either brand across all four sizes and get PNGs you’d defend. Make the campaign up — the Long Island Railroad, whatever. Email me a few. I can tell you inside five minutes whether they’re good enough to keep going.
+
+    
+    
+    
+    The four parts
+
+    
+    1. Generate an ad from a brain
+
+    Resolve the brand, generate a plate, overlay the copy, render the canvas. SKILL.md has the contract: plate-first, one plate per canvas size, every word live in HTML, logos at their real proportions.
+
+    That contract is necessary and it isn’t sufficient. An ad whose copy is the same colour as the plate behind it satisfies every rule in SKILL.md and is worth nothing. The model can read images. Have it look at what it made before anything calls itself done.
+
+    Do it for both brands. A pipeline that only works for Kahua isn’t a pipeline.
+
+    Plate generation is an image model call. We use gpt-image-2 through the OpenAI images API.
+
+    These sizes have to work: 1080x1080, 1200x628, 1080x1350, 728x90. If your sizing logic can’t produce one of them, that’s a finding — say so, rather than letting the request fail at run time.
+
+    
+
+    Request intake. Choosing an inspiration is its own step, and the composer treats Brand Kit, Brain, Templates and Past work as four separate things.
+
+    
+    
+    2. The engine
+
+    This is the centre of it and it’s what I grade hardest.
+
+    A first generation is never the final asset. The operator changes something and regenerates, comes back tomorrow and changes it again. Meanwhile the other customer is doing the same thing. Every one of those is the same event: clean box, right files in, prompt, agent works, agent saves, box dies.
+
+    Three kinds of data are going into that box, and they look alike but aren’t: what’s the same every run (the skill, the contracts, the tooling), what’s the same for one customer (the brain), and what lives for one job (the request, its copy, its comments, its revisions). Where each lives and how each gets in is yours to design and defend. One constraint: a rebrand can’t need a rebuild.
+
+    The brand kit gets pulled fresh, every run, from wherever you keep it. The moment a box already “knows” which brand it serves, you’ve lost — that’s how quiet leaks start, and quiet is the operative word: nothing errors, the ad just carries the other customer’s brand.
+
+    The horrifying test case. Emplifi starts a new task. Kahua starts a new task. Kahua edits it. Emplifi edits the first task. Emplifi starts a second task. All at once, in whatever order the operators happen to click. Nothing crosses, nothing waits for a friendly ordering, and every ad is traceable to its own inputs. Run different inspirations through at the same time — if two outputs come back looking like the same inspiration, something crossed.
+
+    I don’t need to watch a demo of this. I’ll be able to tell from how you hydrate whether this case fails. A green check is not the evidence; the hydration path is. If you build a leak detector, show me it can see — “no leaks found” from a detector that finds nothing looks exactly like success. Plant a leak once and make it catch it.
+
+    Resume. Get back to revision three after four went wrong. Snapshot, diff, or recipe you replay — your call, defended in the write-up. The test I care about: kill the box, spin a new one, rehydrate, and the agent picks up as if the files were never deleted. It should never know.
+
+    When a run dies. Not if — when. The box gets killed at minute nine of a ten-minute job. The image model call already succeeded and you’ve been billed for it; the save got halfway. When the operator hits retry, what happens to what the first attempt produced? Tell me which of your states a retry recovers and which need a human with database access. Crash it on purpose at least once to find out. You’ll debug all of this faster if runs save their own agent transcripts alongside the work — I don’t need those, but you will.
+
+    Day two, a third brand. At the walkthrough I hand you a brain you’ve never seen, same shape as the other two. It goes through your system — new task, then one edit — with zero code changes. If somewhere in your code a third brand needs a third anything, you’ve hardcoded the thing this part exists to test.
+
+    You’re done with this part when the horrifying case runs concurrently with evidence nothing crossed, and a killed box comes back without the agent noticing.
+
+    
+    
+    3. A feedback surface
+
+    Build one: chat, or pinned comments. Argue both in the write-up.
+
+    If you build comments: pins are areas, not points.
+
+    
+
+    Pins are areas, not points: “Click Item or Drag Area to Comment”. Note v5 revision, 3 open, and “Hide older revision comments”. Comments outlive the asset they were left on.
+
+    
+
+    Same surface, composing one. “Selected area on page 1”, then Comment or Image, then Generate / Upload / Search, then a prompt. That’s a region turning into something an agent can act on.
+
+    What I grade here is not the routing. Whether an edit is a text change in the HTML or a full plate regeneration is the model’s decision, and it’s good at it — don’t build a classifier for it. What I grade is whether the comment hydrates: right tenant, right task, right revision, right coordinates, and a prompt that lets the agent know what the human meant. This is where things actually go wrong.
+
+    What happens to a pin when the asset regenerates and the thing under it moved — stale, resolved, orphaned — is a write-up question. Answer it in DECISIONS.md; don’t build it.
+
+    You’re done when a comment left in the front end round-trips: it reaches the agent attached to the right revision of the right task of the right tenant, the agent acts on it, and the updated asset is back in the front end without you touching anything in between.
+
+    
+    
+    4. Deploy it
+
+    The ad lands in the customer’s marketing tool. In production that’s HubSpot or Marketo, driven by computer use, because none of them have a usable API for creative upload.
+
+    By the time you’re here, this part is small. A deploy is the same event as everything else — same box, same files — plus a browser, credentials, and a different instruction. If deploying made you build a second subsystem, go back and find what the first one was missing.
+
+    
+
+    The deployment plan. Look at the status column: several rows say “Deployment output not verified”. That’s the system telling an operator it clicked the buttons but never checked the result.
+
+    You’ll drive a browser against Adstream, a stand-in ads manager we’re hosting. Sign in, get through the create flow, upload the creative, publish, land on the ad detail page.
+
+    URL:      https://adstream.bhairav.workers.dev/Login:    demo@adstream.test / adstream
+
+    It behaves like the real thing, so:
+
+    Ad names get normalised on save. What you typed isn’t what’s stored.
+
+    Next and Publish stay disabled until that page’s fields are all set.
+
+    Publishing takes between two and nine seconds.
+
+    Duplicate names are fine. Nothing dedupes.
+
+    The success toast lasts six seconds and doesn’t clear on navigation, so it can show up on a page it doesn’t belong to.
+
+    Two requirements.
+
+    The browser runs where the agent runs. Not on your machine — that breaks the entire paradigm.
+
+    Every deploy run saves a recording of the browser session somewhere I can watch it later. Kernel does this through an API, which is why we suggest it, but Playwright inside the box is fine too. No recording, no deploy.
+
+    After the agent says “deployed”, the detail page is the only place the truth lives. The run isn’t over until the detail page has been read and the result saved with the rest of the work.
+
+    You’re done when a deploy fired from the front end ends with a verified detail page and a recording I can watch.
+
+    
+    
+    What I’m reading for
+
+    Design sense. Does it look like the brand, or like a model produced something roughly the right colour? You’re allowed to think the generated ad is bad and say so.
+
+    How you work with the agent. I read the whole transcript. What I’m looking for is where your judgement changed the outcome: a redirect, a rejected suggestion, a claim you checked instead of taking. At the walkthrough I’ll pick a decision your agent made and ask you to defend it. “The model decided” is not a defence.
+
+    Checks that point at the truth. Don’t write software that grades brand conformance. That is exactly where software will always fail you. The model can read images — let it look at the rendered PNG and judge. Software keeps the checks that have exact answers. For every check you keep, be able to say what artifact it points at: if it reads the HTML and the customer sees a PNG, you’ve verified a file the customer never sees, and the two drift apart without either one looking wrong.
+
+    It should run.
+
+    
+    
+    Side quests
+
+    If you’re wondering whether something is worth doing, ask me. One email, and I’ll tell you whether it’s side-quest territory. Things I already know are:
+
+    Brand-kit versioning and rollback. Assume the kit is set. What should happen when the brand changes between revision three and revision six is a DECISIONS.md question — it has no clean answer and I want to hear yours — but a version graph is time you didn’t spend finishing.
+
+    Optimization of any kind. Cold starts are sub-second; leave them alone. The number one failure mode of this trial is polishing one part and not finishing.
+
+    Separating compute from the coding agent. Interesting. Not now.
+
+    
+    
+    Reference
+
+    Pick your own tools. You provision your own keys and I’ll give you a card. Read them from the environment, don’t commit them.
+
+    Give the agent real keys — that’s fine here, scoped to what it needs to write. What a bad generation could reach from inside the box is a DECISIONS.md question, not a permission system you build.
+
+    OpenAI images
+platform.openai.com/docs/guides/images
+OpenAI computer use
+platform.openai.com/docs/guides/tools-computer-use
+Anthropic Claude Agent SDK
+docs.claude.com/en/api/agent-sdk/overview
+Claude Code headless (claude -p)
+docs.claude.com/en/docs/claude-code/headless
+E2B sandboxes
+e2b.dev/docs
+Daytona
+daytona.io/docs
+Kernel
+docs.onkernel.com
+Browserbase
+docs.browserbase.com
+Playwright
+playwright.dev/docs/intro
+
+    This is Emplifi’s own product, for brand reference. Useful when you’re judging whether a generated ad looks like it belongs to them.
+
+    
+
+    Emplifi’s real surfaces: their spacing, type and colour in use.
+
+    
+    
+    What to send back
+
+    Be more inclusive than less. If it exists, I want it.
+
+    The repo, with git history.
+
+    The full raw transcript of every agent session, dead ends included. Please don’t tidy it into a cleaner story. The mess is the point.
+
+    Everything the system produced: the generated ads for both brands and the third, the plates, the contents of your buckets, a dump of your database, the deploy recordings.
+
+    A short DECISIONS.md: what you built, what you stubbed, what you’d do next, and which of your claims you’re least sure of. The storage, hydration and resume model goes here, plus the four questions this brief routes to it: the brand-changed-between-revisions answer, the stale-pin answer, the concurrency cap and what happens to the fourth request, and the blast radius of the agent’s credentials.
+
+    Day two you walk us through it.
+
+    All four parts are doable in the time. If something’s half built, say so and say why, but the target is finishing.
+
+    What separates people on this is whether they can tell the difference between something that worked and something that only looked like it worked. That goes for the ads you generate, the checks you write, and what your agent tells you.
+
+    
+    
+    
+      
+        
+      
+      
+      
+      
+    
+  
+
+

@@ -74,6 +74,19 @@ Three kinds of data go into a box. They look alike and are not.
 
 The brain is never baked. That is what makes a rebrand not need a rebuild.
 
+**No caching, no download skipping, no cold-start tuning.** Baking assets in to
+make a box start faster is an explicitly named road bump. Correctness is graded;
+performance is not. Every run downloads every asset it needs, every time, even
+when that is obviously wasteful.
+
+### Arbitrary output, not four files
+
+A request may ask for one ad or fifty, each at one canvas size or several. The
+number of artifacts a run produces is decided by the request and the agent, not
+by the schema: artifacts are rows created as they are ACKed, and the front end
+renders whatever exists rather than a fixed grid. Nothing in the storage model,
+the hydration file, or the UI assumes four of anything.
+
 **The box boots holding only an opaque run id.** No tenant in its name, tags,
 or metadata. It learns which brand it serves by fetching the job manifest, then
 pulls that brand's kit. A box that already knows its tenant is the failure this
@@ -318,6 +331,15 @@ in-process SDK MCP server, registered through `mcpServers` and pre-approved in
 | `look_at_render` | Returns the rendered PNG as an image block for the mandatory visual judgement |
 | `save_artifact` | Uploads, verifies, ACKs, and returns any rejection as text the model can act on |
 
+`save_artifact` is also baked into the image as a plain CLI the agent can invoke
+from Bash with arguments. Same code path, two front doors: the tool gives
+structured errors the model reads, and the script keeps the save mechanism
+inspectable by hand inside the box, which is how it gets debugged.
+
+An attached inspiration is passed into the `generate_plate` call as reference
+imagery alongside the brand colours, which is what it is for. It never
+contributes a token, a colour sample, or a line of copy.
+
 The split follows the brief's rule about where checks belong. The size
 arithmetic has exact answers, so software owns it and the tool refuses an
 impossible canvas with the numbers in the error message. Whether the ad is any
@@ -460,9 +482,21 @@ driven by the hydration file rather than by a different subsystem:
 Least privilege follows from that split: a deploy box never holds an image-model
 key, and a generation box never holds marketing-tool credentials.
 
-The browser runs in the sandbox, never locally. Playwright drives Adstream
-(`https://adstream.bhairav.workers.dev/`), which is a client-rendered SPA, so
-HTTP calls are not an option.
+The browser runs in the sandbox, never locally. Adstream
+(`https://adstream.bhairav.workers.dev/`) is a client-rendered SPA, so HTTP
+calls are not an option.
+
+**The agent drives the browser; a script does not.** A pre-written Playwright
+selector script is a named road bump, because the graded test case is whether
+the deploy survives a UI change. Playwright is the actuator — click, type,
+navigate, screenshot — and the agent is the driver, reading a screenshot after
+each step and deciding the next action from what it sees. No selector path is
+hardcoded to Adstream's current DOM.
+
+This is also the only way the listed Adstream behaviours can be handled
+honestly: a normalised ad name has to be *read back*, a disabled Next button has
+to be *observed* rather than waited on blindly, and a toast that outlives its
+page cannot be trusted as evidence of anything.
 
 Adstream's real-world behaviours to handle: ad names are normalised on save, so
 what was typed is not what is stored; Next and Publish stay disabled until a
@@ -516,6 +550,24 @@ evidence that nothing crossed.
 - The Kahua 728x90 impossibility.
 - Barlow Condensed named but not shipped.
 - The missing `kahua-logo-white.svg`.
+
+## What gets submitted
+
+Treated as part of the deliverable, not paperwork.
+
+- **Every agent transcript, raw and untidied.** Missing transcripts are the
+  single most automatic disqualifier — code without them cannot be graded. That
+  includes the sessions that produced this spec, dead ends included. They are
+  committed as captured; the mess is the point.
+- The repo with full git history.
+- Everything the system produced: ads for all three brands, plates, bucket
+  contents, a database dump, deploy recordings.
+- `DECISIONS.md`, carrying the four routed questions plus what was stubbed and
+  which claims are least certain.
+
+All four parts must be finished. An otherwise strong submission that does not
+reach deployment is the second most common automatic disqualifier, which makes
+deploy a scheduling constraint rather than a final flourish.
 
 ## Explicitly not built
 
