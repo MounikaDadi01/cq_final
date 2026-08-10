@@ -38,19 +38,13 @@ treatment reference only; the agent never claims publication.
 
 ## Stack
 
-| Layer | Choice |
-|---|---|
-| Front end | React, served from EC2 |
-| Backend API | Same EC2 box, private subnets |
-| Edge | CloudFront → VPC origin → internal ALB → EC2 |
-| Database | RDS Postgres, isolated subnets |
-| Object store | S3 — brains, run outputs, Terraform state |
-| Sandboxes | E2B, one per run, off-AWS |
-| Agent runtime | Claude Agent SDK inside the sandbox |
-| Image model | gpt-image-2, wrapped as an SDK custom tool |
-| Queue | Postgres, `FOR UPDATE SKIP LOCKED` |
-| Secrets | Secrets Manager, agent gets scoped STS sessions |
-| IaC | Terraform, S3 backend with `use_lockfile = true` |
+Every choice and the reason for it is in one table, under
+[Everything we are using, and why](#everything-we-are-using-and-why). It is not
+duplicated here — two lists of the same thing drift, and the annotated one is
+strictly more useful.
+
+Two properties of the shape are worth stating up front, because the rest of the
+document leans on them.
 
 Front end and backend are deliberately co-located on EC2. Sandboxes are
 deliberately not — that separation is what keeps constraint 3 satisfied by
@@ -912,6 +906,28 @@ against real output", which is only meaningful if the checks already exist.
 
 ---
 
+### Everything we are using, and why
+
+| Layer | Choice | Why this one |
+|---|---|---|
+| Language | TypeScript on Node 22 | One language across front end, API, sandbox tooling and tests; no context switch under time pressure |
+| Front end + API | Next.js on EC2 | React is required; Next puts the API on the same box, which is one deploy target instead of two |
+| Database | RDS Postgres | Requests, revisions, messages, artifacts, brand state. Also the queue, via `FOR UPDATE SKIP LOCKED` |
+| Queue | The `runs` table | A queue service would duplicate what the table and provider liveness already do, and create a second source of truth |
+| Object store | S3 | Brains, run outputs, transcripts, recordings, Terraform state. Versioning on, and the key is the relative path |
+| Edge | CloudFront → VPC origin → internal ALB | Keeps the load balancer private; also the route the sandbox uses to ACK |
+| Sandbox | E2B, one per run | A plain provider rather than a managed-agent platform. Off-box by construction, which satisfies the co-location constraint structurally |
+| Agent | Claude Agent SDK, in-sandbox | Custom tools on an in-process MCP server, plus hooks for durability enforcement |
+| Image model | gpt-image-2 | Required. Wrapped as a tool so the size arithmetic is deterministic and the aesthetic judgement stays with the model |
+| Render + browser | Playwright, in-sandbox | HTML to PNG and the deploy browser are the same dependency, so one template covers both |
+| Save-out | `save_work` script in the box | The agent saves its own work. A plain executable is inspectable by hand inside the box, which is how it gets debugged |
+| Secrets | Secrets Manager → scoped STS | Agent gets a session limited to one revision prefix; blast radius is one prefix |
+| Deploy transport | SSM Run Command | EC2 has no public IP, so there is nothing to SSH to |
+| Registry | ECR + Parameter Store | Image tags are git SHAs; the E2B template id is a parameter, so a rebuild needs no code change |
+| IaC | Terraform ≥ 1.11, S3 backend | `use_lockfile` gives native state locking with no DynamoDB table |
+| CI/CD | GitHub Actions + OIDC | No long-lived AWS keys in the repo |
+| Tests | Vitest + pngjs | No native dependencies, no browser needed for the check library, sub-second runs |
+
 ### The architecture, and why each piece is there
 
 Bracketed numbers are the stage that builds that piece.
@@ -1061,11 +1077,10 @@ names this repo and no other.
 
 **Purpose.** Stand up everything a run will need, in one shot.
 
-**Do.** VPC across two AZs · public subnets for NAT · private app subnets ·
-isolated database subnets · NAT gateway · S3 gateway endpoint · interface
-endpoints including `ssm`, `ssmmessages` and `ec2messages` · RDS Postgres ·
-buckets · internal ALB · EC2 with the SSM instance profile · CloudFront with a VPC
-origin and two cache behaviours · Secrets Manager · IAM roles.
+**Do.** Apply the full inventory under [Terraform](#terraform) — networking,
+compute and data, edge, buckets, IAM. That section is the single list, with the
+reason each awkward item is there; it is not repeated here so the two cannot
+drift.
 
 **Why here.** A delivery pipeline needs its whole target to exist; phasing the
 infrastructure means building the pipeline twice.
@@ -1076,19 +1091,48 @@ at once.
 
 ---
 
-### Stage 4 — Delivery pipelines
+### Stage 4 — The application, and the pipeline that ships it
 
-**Purpose.** Make every subsequent change ship in one push.
+**Purpose.** Create the app every later stage extends, and the pipeline that puts
+it on the box. Until this stage there is nothing to deploy.
 
-**Do.** *App:* build, tag with the git SHA, push to ECR, SSM Run Command to pull
-and restart. *Sandbox template:* `e2b template build` on changes under `sandbox/`,
-writing the new template id to Parameter Store.
+**Do — the application**
+- Next.js project: routing, layout, the API client, and `/health` for the target
+  group to poll.
+- The operator shell: a customer switcher, a run list read from RDS, and an asset
+  view that renders **whatever exists** rather than a fixed grid.
+- Server-side: the request-intake endpoint and the artifact ACK endpoint, with
+  `/api/*` configured for POST through CloudFront.
 
-**Why here.** Everything after this is iterative, and hand-deploying it would tax
-every stage that follows. SSM rather than SSH because EC2 has no public IP.
+**Do — the pipelines**
+- *App:* build, tag with the git SHA, push to ECR, SSM Run Command to pull and
+  restart. SSM rather than SSH because EC2 has no public IP.
+- *Sandbox template:* `e2b template build` on changes under `sandbox/`, writing
+  the new template id to Parameter Store so a rebuild needs no code change.
 
-**Done when** `describe-instance-information` returns the instance and a merge to
-`main` lands on the box unattended.
+**Why here.** The pipeline has nothing to ship until the application exists, and
+building both together makes the first deploy the first test of the pipeline.
+Everything after this adds screens and endpoints to a running app rather than
+standing up new infrastructure.
+
+**Done when** `describe-instance-information` returns the instance, and a merge to
+`main` puts a page on the box unattended, reachable through CloudFront.
+
+#### The front end, stage by stage
+
+It is a thread rather than a single stage, so here is exactly what appears when.
+
+| Stage | What lands in the UI |
+|---|---|
+| **4** | The shell: layout, routing, customer switcher, run list, empty asset view |
+| **5** | Brain ingest: upload a brain, and the findings report shown *before* anything commits |
+| **6** | The asset view fills in — the first real run's renders, at whatever count it produced |
+| **8** | Run state: partial saves labelled *"saved early"* in amber, delete, re-run |
+| **9** | Chat against a named revision, and the updated asset returning |
+| **10** | Deploy, the recording link, and the verified detail page |
+
+Nothing in it assumes four of anything, which is the property the arbitrary-output
+rule exists to protect.
 
 ---
 
