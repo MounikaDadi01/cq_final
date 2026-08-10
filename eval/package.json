@@ -1,0 +1,20 @@
+{
+  "name": "@cq/eval",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Evaluation layer: disqualifier scanners and render checks. Brand-agnostic by construction.",
+  "scripts": {
+    "unpack": "node scripts/unpack.mjs",
+    "pretest": "npm run unpack",
+    "test": "vitest run",
+    "watch": "vitest"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.1",
+    "@types/pngjs": "^6.0.5",
+    "pngjs": "^7.0.0",
+    "typescript": "^5.9.3",
+    "vitest": "^2.1.8"
+  }
+}

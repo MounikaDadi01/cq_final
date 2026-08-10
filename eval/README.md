@@ -1,0 +1,71 @@
+# Evaluation layer
+
+Ships before the thing it grades. 83 tests, no browser, no image model, no AWS.
+
+```bash
+cd eval
+npm install
+npm test          # extracts the packet, then runs everything
+npx tsc --noEmit  # typecheck
+```
+
+## What it covers
+
+| Suite | Subject |
+|---|---|
+| `capability.test.ts` | The image model's size envelope, and what to generate at for a given canvas |
+| `brain.test.ts` | Brain loading, palette parsing, generic font substitution |
+| `checks.test.ts` | Render checks: dimensions, uniform scale, palette, pixel fidelity, fonts, assets, copy, bounds, overlap, roles |
+| `disqualifiers.test.ts` | Static scanners, one per listed disqualifier with an exact answer |
+
+## Two rules it is built on
+
+**Nothing names a customer.** Tenant names, kit ids, palettes, fonts, logo
+proportions and canvas sizes are all discovered — brains from the directory that
+holds them, canvases from the request payloads in the packet. Pass in a brand
+nobody has seen and the same assertions run against *its* values. The scanner
+that forbids tenant names in source takes the tenant list as an argument, so a
+third brand is covered the moment it lands on disk.
+
+**Every detector is shown catching something.** Each check has two tests: it
+passes a compliant render, and it fails a planted violation. A detector that has
+never fired is indistinguishable from a clean codebase, and "no leaks found"
+from a scanner that finds nothing looks exactly like success.
+
+The cross-tenant fixture is real rather than synthetic: the packet already ships
+an asset tagged to one kit sitting inside another brain's manifest. `brain.test.ts`
+asserts that hazard still exists, so if the fixture ever disappears the leak test
+fails loudly instead of passing vacuously.
+
+## Checks with exact answers only
+
+Canvas geometry, scale uniformity, colour provenance, font provenance, asset
+resolution and kit ownership all have exact answers, so software owns them.
+
+Whether an ad is any *good* has no exact answer and is deliberately absent.
+Software that grades brand conformance passes work a person would reject and
+rejects work a person would ship. That judgement belongs to the model looking at
+the rendered PNG.
+
+## The check that matters most
+
+`pixel-fidelity` samples the region an overlay occupies and asks whether the
+pixels a customer will actually see carry the colour the HTML declared. A check
+that only reads the HTML has verified a file nobody looks at, and the two drift
+apart without either one looking wrong.
+
+## Deliberately not covered yet
+
+- Anything requiring a live sandbox. These run locally, by design — the skill has
+  to make ads worth defending before hydration is worth debugging.
+- Chromium font loading. A TTF in a directory is not used unless it is installed
+  into fontconfig or loaded via `@font-face` with a `file://` src; the assertion
+  for that needs a real render and lands with the renderer.
+- "A hardcoded ordering." It cannot be settled by reading source. It is proven by
+  running the interleaved concurrent case and observing that nothing crossed.
+
+## Found by these tests already
+
+The first draft of the fixture builder clamped a logo's width without recomputing
+its height, which is an unequal X and Y scale. `logo-aspect` caught it on the
+portrait canvas for both brands before any real render existed.
