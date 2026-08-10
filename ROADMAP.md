@@ -1147,12 +1147,18 @@ hours saved go to deploy.
 
 ### Stage 10 — Deploy *(automatic disqualifier if unfinished)*
 
-Drive Adstream, save the recording, read the detail page back.
+A deploy is its own run, so it spins **its own fresh box** — the generation box
+died when that run ended. This one hydrates the finished artifacts from
+`rev-<n>/` rather than a brain, drives Adstream, saves the recording, and reads
+the detail page back.
 
 **Stack** Playwright in the sandbox, agent-driven.
-**Why** Playwright is already in the template for rendering, so deploy adds no new
-dependency. The agent decides from each screenshot rather than following a
-selector script, because the graded test is resilience to a UI change.
+**Why** The browser has to run where the agent runs, or the paradigm breaks. And
+Playwright is already baked into the template for HTML-to-PNG rendering, so deploy
+adds no new dependency and needs no second template — one image serves both, and
+only the credentials, the allowed tools and the prompt differ. The agent decides
+from each screenshot rather than following a selector script, because the graded
+test is resilience to a UI change.
 
 ---
 
@@ -1292,8 +1298,9 @@ step in between.
 
 ## Deploy
 
-The same event as everything else — same box shape, same files — plus a
-browser, credentials, and a different instruction.
+The same *shape* of event as everything else — a clean box, the right files in, a
+prompt — plus a browser, credentials, and a different instruction. Not the same
+box: that one is long dead. A deploy is its own run and gets its own.
 
 **One template, separate instance.** Playwright is already in the image for
 HTML-to-PNG rendering, so a deploy needs no second template; building one would
