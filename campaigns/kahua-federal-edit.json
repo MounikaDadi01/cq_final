@@ -1,0 +1,26 @@
+{
+  "id": "kahua-federal-edit",
+  "brand_kit_id": "bk-kahua-2026",
+  "campaign": "Federal Portfolio ABM",
+  "kind": "edit",
+  "of_campaign": "lirr-east-side-access",
+  "of_revision": 1,
+  "canvases": [
+    { "name": "portrait", "width": 1080, "height": 1350 }
+  ],
+  "copy": {
+    "eyebrow": "Case Study",
+    "headline": "$50B+ in federal assets managed on Kahua",
+    "subhead": "GSA standardized on Kahua for its national portfolio.",
+    "cta": "See the federal brief",
+    "cta_href": "https://kahua.example/federal-brief",
+    "legal": null
+  },
+  "plate_direction": "Same photo direction as the parent. Quieten the upper area behind the headline.",
+  "inspirations": [],
+  "messages": [
+    "This is unreadable where it sits. The sky behind it is doing too much.",
+    "Wrong colour, and it should read as the only thing to click."
+  ],
+  "notes": "Made up for local testing of the edit path. Mirrors the packet's edit request so the parent-plate reuse and message hydration can both be exercised."
+}

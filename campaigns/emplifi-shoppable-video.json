@@ -1,0 +1,22 @@
+{
+  "id": "emplifi-shoppable-video",
+  "brand_kit_id": "bk-emplifi-2026",
+  "campaign": "2026 Social Commerce Predictions",
+  "kind": "new",
+  "canvases": [
+    { "name": "square",    "width": 1080, "height": 1080 },
+    { "name": "landscape", "width": 1200, "height": 628  },
+    { "name": "portrait",  "width": 1080, "height": 1350 }
+  ],
+  "copy": {
+    "eyebrow": "2026 Predictions",
+    "headline": "Shoppable video becomes the default discovery surface",
+    "subhead": "TikTok Shop now hosts 500,000+ US sellers. Your feed is a storefront.",
+    "cta": "Get the predictions",
+    "cta_href": "https://emplifi.example/predictions-2026",
+    "legal": null
+  },
+  "plate_direction": "Deep navy ground. A real product surface or phone UI held in frame in the lower half, framed by periwinkle geometric shapes — circles, an arc, a thin connecting line. High contrast, generous whitespace above for copy. Prefer real interface over abstract illustration.",
+  "inspirations": ["emplifi-predictions-square.png"],
+  "notes": "Made up for local testing, reusing the packet's own copy so the output can be compared against their real inspiration."
+}
