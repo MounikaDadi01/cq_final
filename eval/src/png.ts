@@ -152,6 +152,11 @@ export function colourCoverage(
   return total === 0 ? 0 : hits / total
 }
 
+/** Relative luminance of the dominant colour in a region. */
+export function luminanceAt(raster: Raster, box: Box): number {
+  return relativeLuminance(dominantColour(raster, box))
+}
+
 /** The most common colour in a region, quantised to reduce noise. */
 export function dominantColour(raster: Raster, box: Box, bucket = 8): string {
   const b = clampBox(raster, box)

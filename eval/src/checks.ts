@@ -1,7 +1,7 @@
 import type { Brain } from './brain'
-import { normaliseHex, paletteIsPartial, resolveFamily, slugify } from './brain'
+import { chooseLogo, normaliseHex, paletteIsPartial, resolveFamily, slugify } from './brain'
 import type { Box, Raster } from './png'
-import { colourCoverage, contrastRatio, dominantColour } from './png'
+import { colourCoverage, contrastRatio, dominantColour, luminanceAt } from './png'
 
 /**
  * Checks operate on a normalised bundle rather than driving a browser, so they
@@ -203,6 +203,52 @@ export function checkPaletteConformance(bundle: ArtifactBundle, brain: Brain): F
   }
 
   if (out.length === 0) out.push(pass('palette-conformance', 'no declared colours to check'))
+  return out
+}
+
+export interface LogoGroundAssessment {
+  assetPath: string
+  groundLuminance: number
+  groundIsDark: boolean
+  /** The kind actually placed, resolved from the manifest. */
+  placedKind: string | null
+  /** The kind the preference order would reach for on this ground. */
+  recommendedKind: string | null
+  matchesRecommendation: boolean
+  reason: string
+}
+
+/**
+ * Measures the ground under each placed logo and reports what the preference
+ * order would have chosen.
+ *
+ * A measurement, not a check. Whether a logo survives its ground is SKILL.md's
+ * question for a person looking at the render — software supplies the exact
+ * number and the recommendation, and stops there. A wordmark deliberately placed
+ * on a light corner of a dark plate is correct, and no threshold could tell that
+ * apart from a mistake.
+ */
+export function assessLogoGround(
+  bundle: ArtifactBundle,
+  brain: Brain,
+  raster: Raster,
+): LogoGroundAssessment[] {
+  const out: LogoGroundAssessment[] = []
+  for (const el of bundle.overlay) {
+    if (el.role !== 'logo' || !el.assetPath) continue
+    const placed = brain.assets.find((a) => a.path === el.assetPath)
+    const groundLuminance = luminanceAt(raster, el.box)
+    const choice = chooseLogo(brain, groundLuminance)
+    out.push({
+      assetPath: el.assetPath,
+      groundLuminance: Math.round(groundLuminance * 1000) / 1000,
+      groundIsDark: choice.groundIsDark,
+      placedKind: placed?.kind ?? null,
+      recommendedKind: choice.kind,
+      matchesRecommendation: placed?.kind === choice.kind,
+      reason: choice.reason,
+    })
+  }
   return out
 }
 

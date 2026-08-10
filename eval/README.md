@@ -1,6 +1,6 @@
 # Evaluation layer
 
-Ships before the thing it grades. 130 tests, no browser, no image model, no AWS.
+Ships before the thing it grades. 144 tests, no browser, no image model, no AWS.
 
 ```bash
 cd eval
@@ -19,6 +19,7 @@ npx tsc --noEmit  # typecheck
 | `disqualifiers.test.ts` | Static scanners, one per listed disqualifier with an exact answer |
 | `ingest.test.ts` | Brain ingest planning, including a brand that exists nowhere in the packet |
 | `silent-cases.test.ts` | Input software cannot read — every case that used to pass quietly |
+| `logo-ground.test.ts` | Choosing a logo for the ground it sits on, when a reverse mark is missing |
 
 ## Two rules it is built on
 

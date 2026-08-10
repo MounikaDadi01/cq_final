@@ -345,3 +345,78 @@ export function resolveFamily(brain: Brain, requested: string): FamilyResolution
 export function declaredFamilies(brain: Brain): string[] {
   return [...new Set(Object.values(brain.type))]
 }
+
+/**
+ * Which asset kind to reach for, by how dark the ground is.
+ *
+ * Policy as data, not code — in production this is a row, so a brand shipping a
+ * kind nobody anticipated needs no edit here. On a dark ground the list stops at
+ * two entries on purpose: if neither a reverse mark nor a symbol exists, the
+ * answer is to omit and escalate, never to place a wordmark that will not read.
+ */
+export interface LogoPreference {
+  dark: string[]
+  light: string[]
+}
+
+export const DEFAULT_LOGO_PREFERENCE: LogoPreference = {
+  dark: ['logo_reverse', 'logo_mark'],
+  light: ['logo', 'logo_mark'],
+}
+
+/**
+ * The luminance below which white type outreads black type. The crossover is
+ * exact, which is why software is allowed to compute it.
+ */
+export const DARK_GROUND_LUMINANCE = 0.179
+
+export interface LogoChoice {
+  asset: BrandAsset | null
+  kind: string | null
+  groundIsDark: boolean
+  reason: string
+}
+
+/**
+ * Chooses a logo for the ground it will sit on, using only this kit's own
+ * staged assets that resolve to a file.
+ *
+ * No brand is named. In this packet one brand takes the reverse-logo branch and
+ * the other takes the symbol branch, from the same sentence — which is the shape
+ * of answer a third brand needs.
+ */
+export function chooseLogo(
+  brain: Brain,
+  groundLuminance: number,
+  preference: LogoPreference = DEFAULT_LOGO_PREFERENCE,
+): LogoChoice {
+  const groundIsDark = groundLuminance < DARK_GROUND_LUMINANCE
+  const order = groundIsDark ? preference.dark : preference.light
+
+  const usable = (kind: string) =>
+    brain.assets.find((a) => a.kind === kind && a.kitId === brain.kitId && a.exists)
+
+  for (const kind of order) {
+    const asset = usable(kind)
+    if (asset) {
+      return {
+        asset,
+        kind,
+        groundIsDark,
+        reason: `ground luminance ${groundLuminance.toFixed(3)} is ${
+          groundIsDark ? 'dark' : 'light'
+        }; "${kind}" is the first usable kind in ${order.join(' → ')}`,
+      }
+    }
+  }
+
+  return {
+    asset: null,
+    kind: null,
+    groundIsDark,
+    reason:
+      `ground luminance ${groundLuminance.toFixed(3)} is ${groundIsDark ? 'dark' : 'light'} ` +
+      `but this kit stages none of ${order.join(', ')} — omit the logo and escalate rather ` +
+      'than placing one that will not read, and never typeset a substitute',
+  }
+}

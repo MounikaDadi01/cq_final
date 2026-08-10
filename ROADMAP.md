@@ -328,9 +328,27 @@ Five layers, in order of what they protect:
    returning `decision: "block"` so the run cannot finish quietly incomplete.
 4. **`PreCompact` hook** archives the full transcript before the SDK summarises
    it, so long runs keep their history.
-5. **Heartbeat.** If it stops, the backend marks the run `interrupted`.
+5. **Liveness, asked of the provider.** Every run row carries its
+   `e2b_sandbox_id`, so the backend asks E2B whether the sandbox still exists. A
+   sandbox that is gone while the run is not `completed` becomes `interrupted`.
    Everything already ACKed is reused on retry; anything unverified is
    regenerated.
+
+An earlier draft used a periodic heartbeat from inside the box. Two signals
+replace it and both are better. Asking the provider is *authoritative*, where a
+heartbeat only ever proves the box was alive some seconds ago — and it needs no
+in-box timer, so a busy run can never look dead because the model forgot to tick.
+The supervisor reporting the agent's exit covers the one case liveness cannot: a
+box still up with a dead agent inside it.
+
+Asking E2B about sandbox lifecycle is not reading the box. It is a question to the
+provider about whether a machine exists, which is a different thing from touching
+its filesystem.
+
+The honest cost: if the agent hangs *and* the supervisor dies with it, detection
+waits for the sandbox timeout instead of a heartbeat interval — minutes rather
+than seconds. With a small concurrency cap that holds a slot slightly longer, and
+it is bounded, because the sandbox timeout is set explicitly.
 
 **A box is never kept alive.** `lifecycle.onTimeout` is `kill`, and a completed
 run's box is killed as soon as the agent's `finish_run` lands. Sandbox
@@ -350,42 +368,96 @@ write-through ACK path's job, not a sandbox feature's.
 
 ## Brand data resolution
 
-The brand data is not internally consistent. Per the brief, these are found and
-recorded, not adjudicated by machinery. One value picked, everything set to it,
-written down.
+The packet holds eleven problems, and they are **four different kinds of
+problem**. Collapsing them into one list is the mistake: only the first kind is
+what the brief means by "not internally consistent", and only one item in it
+needs a human to pick anything.
 
-### The cross-tenant leak, pre-planted
+### Class 1 — true inconsistencies: two sources, one field, different values
+
+These are what "pick a value, write it down, move on" is about.
+
+| Conflict | Picked |
+|---|---|
+| **Kahua h1** — type scale 56px, its own prose 48px, cache 56px | **48px** |
+| **Emplifi secondary** — `DESIGN.md` `#6765FE`, cache `#5B5BD6` | `DESIGN.md` |
+| **Emplifi radius** — `DESIGN.md` 12px, cache 16px | `DESIGN.md` |
+| **Emplifi h1** — `DESIGN.md` 48px, cache 56px | `DESIGN.md` |
+
+**Three of the four resolve structurally.** `tokens.json` is never hydrated, so
+for secondary, radius and h1 there is no competing value inside the box to
+adjudicate — we picked `DESIGN.md` by not shipping the alternative. The trap is
+that the cache was exported later (2026-07-28) than `DESIGN.md` was reviewed
+(2026-04-02), so freshness argues for the file that has *"no authority"*.
+
+**Only Kahua's h1 needs an actual judgment**, because both values live inside
+`DESIGN.md` itself and withholding a file cannot fix that. Picked 48px: the prose
+is as binding as the numbers and is the more specific statement. Which value wins
+matters less than the pick being recorded and repeatable, so the resolution is
+deterministic and a test asserts it comes out the same way twice.
+
+### Class 2 — broken references: a pointer with nothing behind it
+
+Nothing disagrees here; something is absent. SKILL.md already prescribes both.
+
+| Reference | Answer |
+|---|---|
+| `kahua-logo-white.svg` listed as `logo_reverse`, no file | On a dark ground, prefer `logo_mark` — Kahua stages an orange hexagon with a white circle that reads on jobsite photography. If neither a reverse nor a symbol exists, **omit and escalate**. Never typeset a substitute, never borrow one. |
+| Heading font "Barlow Condensed", only Barlow 400–700 shipped | **Barlow 700, tight tracking, at the specified size, with the copy cut to fit.** Kahua's own prose says it: *"If the headline does not fit at 48, cut the copy; do not scale the type."* Synthetically condensing a face with `transform: scaleX()` is exactly the distortion that sentence forbids. |
+
+Both answers are generic. The logo rule is a preference order held as data —
+`logo_reverse → logo_mark` on a dark ground, `logo → logo_mark` on a light one —
+and in this packet one brand takes the first branch while the other takes the
+second, from one sentence. The dark threshold is the exact luminance at which
+white type outreads black, so software computes the ground and the agent decides
+whether the logo survives it.
+
+### Class 3 — cross-tenant contamination
 
 `emplifi/brand/asset_manifest.json` lists `partner-lockup.svg` tagged
-`brand_kit_id: "bk-kahua-2026"`. That file is the Kahua logo — orange hexagon,
-`aria-label="kahua"` — sitting inside Emplifi's brain folder. Resolving assets
-by folder or by `kind` ships Kahua's mark on an Emplifi ad, silently. Filtering
-on `brand_kit_id` is the fix, and this asset is the live fixture for proving
-the filter works.
+`brand_kit_id: "bk-kahua-2026"`, and that file *is* the Kahua logo — orange
+hexagon, `aria-label="kahua"` — sitting inside Emplifi's brain folder. Resolving
+assets by folder or by `kind` ships a competitor's mark on an Emplifi ad,
+silently.
 
-### Kahua
+Not a value dispute; picking a value here would be nonsense. Three independent
+gates: quarantined at ingest, filtered at hydration on `brand_kit_id`, rejected
+at ACK. This asset is also the live fixture that proves the filter fires.
 
-| Conflict | Resolution |
-|---|---|
-| Type scale says h1 56px; the *Applying it* prose says 48px on every canvas; `tokens.json` says 56px | 48px. The prose is as binding as the numbers, and it is the more specific statement. |
-| Heading font is Barlow Condensed; `fonts/` ships only Barlow 400/500/600/700 | Barlow 700, tightly tracked — the output of the generic nearest-family fallback, not a rule about Barlow. Recorded as a substitution. |
-| Manifest lists `brand/kahua-logo-white.svg`; the file does not exist | Omit the reverse logo, or place the standard logo where the ground permits. Never typeset a substitute. |
-| The Kahua inspiration uses a red CTA (~`#E4002B`) and a Hensel Phelps co-brand lockup | Ignored. Accent `#F26B21` carries the CTA; no hue outside the palette. |
+### Class 4 — shape differences between brands
 
-### Emplifi
+**Consistent within each brain**, so there is nothing to pick — and the most
+dangerous class, because it breaks code rather than asking for a decision.
 
-`tokens.json` disagrees with `DESIGN.md` on secondary (`#5B5BD6` vs `#6765FE`),
-radius (`16px` vs `12px`), and h1 (`56px` vs `48px`). `DESIGN.md` wins on all
-three. The trap is that the token cache was exported later (2026-07-28) than
-`DESIGN.md` was reviewed (2026-04-02), so freshness argues for the file that
-has no authority.
+| Field | Emplifi | Kahua |
+|---|---|---|
+| Palette | 6 keys, includes `secondary` | 5 keys, **no `secondary`** |
+| Asset kinds | 4, includes `logo_lockup` | 3, **no `logo_lockup`** |
 
-The Emplifi inspiration shows a solid orange filled pill CTA. `DESIGN.md` says
-orange is never a fill and a CTA is an orange label inside a 2px orange
-outline on the navy ground. `DESIGN.md` wins.
+Kahua's `DESIGN.md` and its `tokens.json` agree on both, so neither is a conflict.
+Any code reaching for `palette.secondary` or expecting a lockup works on one
+brand and breaks on the other today, and would break on a third brand tomorrow
+for a different key. Nothing may require an optional field: fall back within the
+same brain, never invent. Tests assert it — a brain carrying only `primary` and
+`surface` plans and checks cleanly.
 
-The Emplifi logo contains `#37B6E9`, which is not in the palette. It is a
-placed asset, so it ships as-is; the colour is never promoted to a token.
+Note that Emplifi's extra asset kind *is* the planted leak. The asymmetry and the
+contamination are the same object.
+
+### Not brand data at all
+
+The two that look like the juiciest conflicts, and are the trap.
+
+The Kahua inspiration uses a red CTA (~`#E4002B`) and a Hensel Phelps co-brand
+lockup. The Emplifi inspiration shows a solid orange filled pill where
+`DESIGN.md` says orange is never a fill and a CTA is an orange label inside a 2px
+orange outline. **Neither is an inconsistency**, because an inspiration has no
+authority — *"never a source of colour, type, spacing, radius or any other
+token"*. An inspiration disagreeing with the brand is an inspiration doing what
+inspirations do.
+
+Separately, the Emplifi logo contains `#37B6E9`, which is not in the palette. It
+is a placed asset, so it ships as-is and the colour is never promoted to a token.
 
 ## Handling worse brand data
 
@@ -424,12 +496,12 @@ be worse than saying we could not tell.
 | Cache disagrees with `DESIGN.md` | Cache is never hydrated, so no competing value exists |
 | `DESIGN.md` contradicts itself | Prose governs and is more specific; ties break on document order so the same brain always resolves the same way, and the resolution is recorded |
 | Named font not shipped | Nearest family from that same brain, heaviest weight, recorded |
-| Asset path dangles | Omit. Never typeset, never borrow |
+| Asset path dangles | Preference order within the same kit: `logo_reverse → logo_mark` on a dark ground, `logo → logo_mark` on a light one. If nothing usable is staged, omit and escalate. Never typeset, never borrow |
 | Asset tagged to another kit | Quarantine at ingest, filter at hydration, reject at ACK |
 | Two assets share a `kind` | Keep both. Never guess which is "the" logo |
 | Optional field absent | Never required; fall back within the brain, never invent |
 | Unknown section or unit | Passes through untouched |
-| Accent unreadable on its ground | Contrast ratio **computed and reported, never enforced** |
+| Accent unreadable on its ground | Contrast ratio and ground luminance **computed and reported, never enforced** |
 | No usable palette at all | Blocked, with a reason |
 
 That last-but-one row is the general line: **compute anything with an exact
@@ -802,7 +874,7 @@ that separation is what keeps the agent from living where the backend lives.
 | Language | TypeScript on Node 22 | One language across front end, API, sandbox tooling and tests; no context switch under time pressure |
 | Front end + API | Next.js on EC2 | React is required; Next puts the API on the same box, which is one deploy target instead of two |
 | Database | RDS Postgres | Requests, revisions, messages, artifacts, brand state. Also the queue, via `FOR UPDATE SKIP LOCKED` |
-| Queue | The `runs` table | A queue service would duplicate what the table and the heartbeat already do, and create a second source of truth |
+| Queue | The `runs` table | A queue service would duplicate what the table and provider liveness already do, and create a second source of truth |
 | Object store | S3 | Brains, run outputs, transcripts, recordings, Terraform state. Versioning on |
 | Edge | CloudFront → VPC origin → internal ALB | Keeps the load balancer private; also the route the sandbox uses to ACK |
 | Sandbox | E2B, one per run | A plain provider rather than a managed-agent platform. Off-box by construction, which satisfies the co-location constraint structurally |
@@ -994,7 +1066,7 @@ waits" is a row staying `queued`. No scheduler.
 
 SQS was removed deliberately: its three jobs here — cap enforcement, durability
 of pending work, and reclaiming stalled runs — are all things the run table and
-the heartbeat already do, and running both meant two sources of truth about
+provider liveness already do, and running both meant two sources of truth about
 whether a run was pending.
 
 ### Run states, partial saves, and deletion
