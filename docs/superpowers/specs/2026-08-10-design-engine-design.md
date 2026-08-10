@@ -48,7 +48,7 @@ treatment reference only; the agent never claims publication.
 | Sandboxes | E2B, one per run, off-AWS |
 | Agent runtime | Claude Agent SDK inside the sandbox |
 | Image model | gpt-image-2, wrapped as an SDK custom tool |
-| Queue | SQS job queue + DLQ |
+| Queue | Postgres, `FOR UPDATE SKIP LOCKED` |
 | Secrets | Secrets Manager, agent gets scoped STS sessions |
 | IaC | Terraform, S3 backend with `use_lockfile = true` |
 
@@ -110,8 +110,61 @@ rather than per-customer branches. A brand inserted for the first time renders a
 valid file immediately, which is how the third-brand test passes by
 construction.
 
-The rendered file is persisted to S3 as the run's replayable recipe, which makes
-resume a replay rather than a reconstruction.
+The rendered file is persisted to S3 at
+`s3://cq-work/<run-id>/HYDRATION.md`, byte-identical to what was written into
+the box, as the run's replayable recipe. That is what makes resume a replay
+rather than a reconstruction, and it is also the audit record of exactly what a
+run was told.
+
+### Exactly what lands in the box
+
+The hydration file names references. These are the files that actually arrive,
+and nothing else does:
+
+| Source | Files | How |
+|---|---|---|
+| Baked in the template | `SKILL.md`, prompt preamble, renderer, Playwright + browsers, `save_artifact` CLI, Agent SDK | Built into the E2B image |
+| Fetched per run | `brain/DESIGN.md` | Presigned, digest-checked |
+| Fetched per run | `brain/brand/asset_manifest.json` | Presigned, digest-checked |
+| Fetched per run | `brain/brand/*.svg` — **only** assets whose `kit_id` equals the run's kit | Filtered at render time |
+| Fetched per run | `brain/fonts/*` — **only** families named in `DESIGN.md` | Filtered at render time |
+| Fetched per run | `inspirations/*` — **only** filenames the request names | Empty list means none |
+| Fetched per run (edits) | Parent plate and parent HTML for the canvases being edited | From the parent revision's artifacts |
+| Written in | `HYDRATION.md` | Backend writes it via the E2B filesystem API |
+
+Three filters do the real work, and each maps to a constraint:
+
+- **Assets by `kit_id`, never by folder.** This is what stops the Kahua logo
+  sitting in Emplifi's manifest from reaching an Emplifi box.
+- **Inspirations only when named.** An inspiration that merely sits in a
+  directory is not selected and must not influence the build, so the fetch list
+  is built from the request's array, never from a bucket listing.
+- **Fonts only from that brain.** Every family named in `DESIGN.md` is fetched,
+  because browser fallback is not the brand.
+
+`brand/tokens.json` is deliberately **not** sent. It carries no authority, it is
+not permitted to contribute a value `DESIGN.md` also states, and in this packet
+it disagrees with `DESIGN.md` on three Emplifi values. Our tooling does not need
+it, so omitting it removes a way to be wrong. Recorded in DECISIONS.md.
+
+### When the file is regenerated
+
+The hydration file is **immutable for the life of a run**. Anything that changes
+what the agent should know produces a new run with a freshly rendered file, so a
+run's recipe always matches what it actually did.
+
+| Event | What happens |
+|---|---|
+| Operator sends a chat message | New run, new file, comments block populated |
+| Retry after a crash | New run, new file, `resume.already_durable[]` reflects what is verified now |
+| Resume after a kill | New run, new file; the agent picks up as if files were never deleted |
+| Deploy | New run, `kind: deploy`, different credentials and prompt |
+| Brand asset changes in S3 | Nothing to update — the next run's file is rendered fresh from current rows |
+| `Save & exit` mid-run | No file change; a message goes to the live agent session |
+
+The last two rows are the point. A rebrand needs no file regeneration because
+nothing was ever frozen, and a wrap-up instruction is a message rather than a
+mutation, so the recipe stays a faithful record.
 
 ### Edit awareness
 
@@ -154,14 +207,35 @@ The agent moves its own work. Nothing else does.
 - After writing, the agent re-reads each object and compares size and digest
   against what it wrote. A mismatch fails loudly, in words, in the same run,
   while the agent can still fix it.
-- `RESULT.json` is written last and is the commit marker. An S3 event to SQS
-  wakes the backend to reconcile S3 into RDS.
+- Each ACK is the commit point for that artifact. There is no terminal file and
+  no separate reconciliation queue: the row exists because the agent said so and
+  the backend verified it.
 
 The backend reads S3. It never reads the box. Saving work is not publishing,
 and reading durable storage is not reaching into a sandbox.
 
 There is no terminal manifest. Completion is a state transition in RDS driven
 by the last ACK, so no single file can strand a run's output.
+
+### How the sandbox reaches the API
+
+The sandbox is off-AWS and the ALB is internal, so it has no private route in.
+The ACK travels the same public path a browser does:
+
+```
+sandbox → CloudFront (public) → VPC origin → internal ALB → EC2
+```
+
+The ALB is not called by the sandbox; it is the last hop inside the VPC, and
+CloudFront is the only public door. Authentication is a per-run bearer token
+minted at hydration and scoped to that run, so a token can only ACK artifacts
+for the run it was issued to. `/api/*` is configured with caching disabled and
+POST and PUT allowed.
+
+Writes to S3 do not take this path — those go direct to the S3 endpoint with the
+scoped STS session, which is why the bucket policy has to permit the public
+endpoint rather than requiring the VPC gateway endpoint. The gateway endpoint
+serves the backend's own S3 access.
 
 ### Surviving abrupt closure
 
@@ -305,6 +379,31 @@ This is the brief's own instruction taken literally: "If your sizing logic can't
 produce one of them, that's a finding — say so, rather than letting the request
 fail at run time."
 
+### The options, ranked
+
+The brief contradicts itself here — "these sizes have to work" and "if your
+sizing logic can't produce one of them, that's a finding" cannot both hold. It
+also says to ask when something is ambiguous, so we ask.
+
+| Option | Compliance | Cost |
+|---|---|---|
+| **A. Email and ask** | The brief invites exactly this: one email resolves it | A reply. Chosen, alongside B as the default meanwhile |
+| **B. Escalate as a finding** | Fully compliant, no invariant bent | No leaderboard exists |
+| **C. Designed band, then crop** | Crops into a different aspect — invariant 2 | Best-looking of the crop family. Operator-accepted deviation only |
+| **D. Geometric plate rendered to exact dimensions** | Arguably compliant: "if the treatment is geometric, the geometry belongs in the plate", and it is one full-canvas raster at exact size | Not made by the image model |
+| **E. Stitch several generations** | The industry workaround | Seams at 90px tall; too much machinery for one canvas |
+| **F. Non-uniform squash** | Stretching — invariant 2 | 2.7x vertical compression destroys any subject. Rejected |
+
+Option C is worth explaining because it is the one a human art director would
+reach for: prompt deliberately for a wide composition with empty margins above
+and below, then take the band. It is still a crop by the letter of the rule, but
+the discarded region was never intended as content.
+
+Option D deserves more credit than it first appears to. Real leaderboards are
+rarely photographic, and Emplifi's own banner in this packet is a navy field with
+geometric shapes rather than a photo — so a rendered geometric plate is
+brand-authentic for this format specifically, not a fallback.
+
 This compounds with Kahua's own rule: a fixed 48px h1 with "cut the copy, do
 not scale the type" cannot coexist with a logo and a CTA inside 90px of height.
 Two independent reasons the leaderboard is the canvas that does not work.
@@ -360,7 +459,8 @@ isolated DB subnets; IGW; NAT gateway; route tables. S3 gateway endpoint;
 interface endpoints for Secrets Manager, STS, CloudWatch Logs.
 
 Compute and data: EC2 in private subnets behind an internal ALB; RDS Postgres
-in isolated subnets with credentials in Secrets Manager; SQS queue and DLQ.
+in isolated subnets with credentials in Secrets Manager. No separate queue
+service — the run table is the queue.
 
 Edge: CloudFront with a VPC origin to the internal ALB. Nothing publicly
 exposed.
@@ -370,6 +470,33 @@ with `use_lockfile = true`. State locking is native S3; no DynamoDB table.
 
 IAM: EC2 instance role, the assumable per-run agent role, Terraform execution
 role.
+
+## Delivery pipeline
+
+Two pipelines, both GitHub Actions, both authenticating by **OIDC** — no
+long-lived AWS keys ever live in GitHub.
+
+**App deploy**, on merge to `main`: build a container image tagged with the git
+SHA, push to ECR, then **SSM Run Command** tells the instance to pull and
+restart. SSM rather than SSH because EC2 sits in a private subnet with no public
+IP, so there is nothing to SSH to — SSM reaches it through the interface
+endpoints with no inbound rule at all. Rollback is the same command with an
+earlier SHA, since image tags are immutable.
+
+**Sandbox template**, on changes under `sandbox/`: `e2b template build` and
+publish, writing the new template id to Parameter Store. Runs pick it up without
+a code change or a redeploy.
+
+The internal ALB stays. CloudFront VPC origins can target an EC2 instance
+directly, which would remove a resource, but the ALB provides a health check
+that nothing else does — during an in-place restart it returns a 503 rather than
+a refused connection — and it decouples CloudFront from the instance's
+lifecycle. Unlike the queue, it is not duplicating something another component
+already handles.
+
+Observability stays thin on purpose: one CloudWatch log group, a `/health`
+endpoint for the target group, run transcripts in S3, and run state visible in
+the UI.
 
 ## Sequencing
 
@@ -406,9 +533,44 @@ the same time, and under per-tenant boxes those two share one box and can cross.
 | A new brand | Needs a new box definition | Works untouched |
 
 Nothing about a sandbox — name, template, tags, environment — records which
-tenant or task it serves. Concurrency comes from SQS plus a named cap on
-simultaneous sandboxes: more boxes horizontally, and the request past the cap
-waits. No scheduler.
+tenant or task it serves.
+
+The queue is the `runs` table, not a queue service. A dispatcher claims work
+with `SELECT ... WHERE state='queued' ORDER BY created_at FOR UPDATE SKIP LOCKED`,
+limited by the named cap minus the current `running` count. "The fourth request
+waits" is a row staying `queued`. No scheduler.
+
+SQS was removed deliberately: its three jobs here — cap enforcement, durability
+of pending work, and reclaiming stalled runs — are all things the run table and
+the heartbeat already do, and running both meant two sources of truth about
+whether a run was pending.
+
+### Run states, partial saves, and deletion
+
+```
+queued → running → { completed | partial | interrupted | failed }
+```
+
+`partial` is the deliberate case: the operator hit **Save & exit** and the agent
+flushed what it had. The UI says so plainly — *"Saved early — 2 of 4 canvases"* —
+with an amber state chip, never a green one, because a half-finished asset that
+looks finished is the failure mode this whole design is arguing against.
+`interrupted` looks the same to the operator but was not their choice.
+
+`Save & exit` is available both while a run is working and after the agent
+reports done. Mid-run it banks what exists rather than discarding it.
+
+**Deletion is soft.** A `deleted_at` timestamp hides the run and its artifacts
+from the UI; an S3 lifecycle rule expires the bytes later. Soft rather than hard
+for two reasons: revision four may have been built from revision three's plate,
+so a hard delete would orphan a child, and a mis-click should be recoverable.
+
+**Retry and re-run are different, and deletion is what separates them.** An
+automatic retry after a crash reuses verified artifacts, because the image call
+was already billed. An operator re-running because they disliked the output
+should get fresh work — and since a deleted run's artifacts are excluded from
+`resume.already_durable[]`, the new run regenerates from scratch. One mechanism,
+two behaviours, no flag to get wrong.
 
 ### Graceful exit
 
@@ -446,8 +608,17 @@ Every run saves its own agent transcript alongside the work.
 
 ## Feedback surface
 
-Pinned comments on regions, not points. A pin carries tenant, task, revision,
-canvas, and coordinates.
+**Chat.** The operator says what is wrong in words, against a named revision.
+Pins were the other option and the brief asks for both to be argued: pins are
+better for "this specific thing, right here" and carry coordinates a plate
+regeneration can use; chat is better for iterative intent and costs a fraction
+of the build. Chat is chosen because the graded part is whether the message
+hydrates to the right tenant, task, and revision — which is identical either
+way — and because the hours saved go to deployment, which is an automatic
+disqualifier if unfinished.
+
+A message carries tenant, task, revision, and body. Coordinates are the only
+thing lost, and the agent can read the render to find what the operator means.
 
 What matters is that the comment hydrates: right tenant, right task, right
 revision, right coordinates, and a prompt that conveys what the human meant.
