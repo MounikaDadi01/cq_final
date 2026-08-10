@@ -728,6 +728,7 @@ with the check that proves it, because a claim without a check is a hope.
 | 8 | **State locking silently absent.** `use_lockfile` no-ops on Terraform below 1.11. | Version pinned in `required_version`; two concurrent plans must produce a lock error. |
 | 9 | **Any repo can assume the deploy role.** An unscoped OIDC trust policy. | `sub` restricted to this repository and ref, asserted by reading the trust policy. |
 | 10 | **A tenant name reaches the source tree.** | CI greps for tenant names outside fixtures and tests and fails the build. |
+| 11 | **Input software cannot read passes quietly.** An SVG with no intrinsic size, a font filename we cannot index, a palette in Pantone — each used to produce a silent pass. | A third outcome. `unverifiable` is reported and surfaced by `unverified()`, so "nothing failed" and "nothing was checked" cannot look alike. Covered by `silent-cases.test.ts`. |
 
 Checks 1 and 4 are the two that would otherwise pass review and fail a
 demonstration, which is why they carry hard failures rather than warnings.
@@ -834,7 +835,7 @@ undebuggable until this part is boring.
 | Need | State |
 |---|---|
 | Source packet extracted to `packet/` | ✅ `cd eval && npm run unpack` |
-| Canvas planner, brain loader, render checks | ✅ built, 106 tests |
+| Canvas planner, brain loader, ingest planner, render checks | ✅ built, 130 tests |
 | `OPENAI_API_KEY` in `.env` | ⛔ **blocks the plate call** |
 | Playwright browser installed locally | ⛔ one command, ~300 MB |
 | Claude Code or Codex to drive the skill | Existing subscription |
@@ -860,7 +861,7 @@ them rather than against fixtures.
 
 ### Stage 1 — Evaluation layer and CI *(evaluation layer done)*
 
-The eval layer already exists: 106 tests, no browser, no image model, no AWS —
+The eval layer already exists: 130 tests, no browser, no image model, no AWS —
 disqualifier scanners, the render check library, the capability envelope, and the
 ingest planner, every detector shown catching a planted violation.
 
