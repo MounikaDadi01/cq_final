@@ -780,20 +780,37 @@ footnote.
 ## Keeping the agent off the backend
 
 The backend now runs on a laptop, which makes spawning the agent beside it
-*easier*, not harder — and there is no IAM boundary left to lean on. So the guards
-have to be structural in the codebase itself:
+*easier*, not harder, and there is no cloud boundary left to lean on. Two guards,
+and both are real:
 
 1. **No agent runtime in the backend package.** The Agent SDK is not a dependency
-   of the app, and a lint rule bans `child_process` there. CI fails on either.
-2. **A run row requires a non-null `sandbox_id`**, by database constraint. A run
-   with no sandbox cannot reach `completed`, so a locally executed generation has
-   nowhere to record itself.
-3. **The sandbox is the only thing holding a model key at generation time.** The
-   backend passes them in and does not use them itself.
+   of the app, and a lint rule bans `child_process` there. CI fails on either, so
+   the code that would run an agent locally cannot be merged.
+2. **A run row requires a non-null `sandbox_id`**, by database constraint, and an
+   artifact belongs to a revision produced by a run. Work generated anywhere but a
+   sandbox therefore has **nowhere to record itself** — it cannot become an
+   artifact, so it cannot reach the front end or a deploy.
 
-Guards 1 and 2 do the work. Guard 3 is a discipline, not a wall — the backend
-holds the keys in `.env` in order to pass them, so it *could* call the image API.
-Saying that plainly is cheaper than implying a boundary that is not there.
+Guard 2 is the wall. It does not ask the backend to behave; it makes
+locally-produced work unrepresentable.
+
+### What is *not* a guard
+
+An earlier draft counted key custody as a third guard — the backend holds the
+model keys only in order to pass them into a sandbox, so it "could" call the image
+API itself. That was guarding the wrong thing.
+
+**Calling an image API is not running an agent.** No disqualifier prohibits it, and
+key possession says nothing about where the agent executes. The claim is removed
+rather than softened, because a guard that protects against a non-risk is worse
+than no guard: it draws attention away from the two that work.
+
+The same reasoning kills it from the other direction. **Gate 0 runs the agent on a
+laptop deliberately** — the brief requires the skill to work in your own Claude
+Code before anything touches a sandbox. A rule against holding model keys locally
+would forbid stage 0. What separates Gate 0 from a violation is not custody but
+category: it produces a validated skill file and prompt, and is never a code path
+the running system can take.
 
 ## How it runs
 
