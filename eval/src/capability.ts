@@ -18,7 +18,17 @@ export interface Envelope {
   supportsTransparency: boolean
 }
 
-/** Published constraints for gpt-image-2 custom sizes. */
+/**
+ * Published constraints for gpt-image-2 custom sizes.
+ *
+ * Source: the OpenAI image generation guide, kept in the repo at
+ * `open-ai-docs.md` — "Maximum edge length must be less than or equal to 3840px /
+ * Both edges must be multiples of 16px / Long edge to short edge ratio must not
+ * exceed 3:1 / Total pixels must be at least 655,360 and no more than 8,294,400".
+ *
+ * Also from there: no transparent background for this model, and outputs above
+ * 2560x1440 are flagged experimental — which none of our canvases approach.
+ */
 export const GPT_IMAGE_2: Envelope = {
   name: 'gpt-image-2',
   edgeMultiple: 16,

@@ -724,6 +724,77 @@ An attached inspiration is passed into the `generate_plate` call as reference
 imagery alongside the brand colours, which is what it is for. It never
 contributes a token, a colour sample, or a line of copy.
 
+### Image API, not the Responses API
+
+OpenAI exposes image generation two ways, and the difference decides it for us.
+Reference: [`open-ai-docs.md`](open-ai-docs.md), kept in the repo.
+
+> With the Responses API, you choose a mainline model that supports the image
+> generation tool; **the tool handles GPT Image model selection.**
+
+That is disqualifying here. The whole canvas argument rests on requesting an exact
+legal size from a model whose envelope we know — 1088x1088, 1088x1360, 3088x1616
+are computed against gpt-image-2's rules specifically. If the tool selected
+`gpt-image-1`, that model accepts three fixed sizes and every plate stops being
+exact-dimension. The brief also names the endpoint: *"We use gpt-image-2 through
+the OpenAI images API."*
+
+Two further reasons, both about our own architecture rather than the API:
+
+- **`previous_response_id` is state we cannot hold.** It lives in OpenAI's
+  conversation store — neither in our tree nor our database. Resume is *box dies,
+  fresh box rehydrates from the tree*; a handle into someone else's session is not
+  a file, and reproducibility would depend on them retaining it.
+- **Most of our iteration is not image iteration.** Plate-first means every word is
+  live HTML, so "this is unreadable where it sits" is usually a move or a colour
+  change in the overlay. Only "the sky behind it is doing too much" is an image
+  call. Multi-turn image editing solves a problem the architecture designed away.
+
+**So: `/v1/images/generations` for a new plate, `/v1/images/edits` for a revision
+that should preserve the previous plate's treatment** — passing the parent plate as
+the input image. That keeps iteration *and* keeps the model pinned.
+
+The edit path earns its place on the vendor's own evidence: *"the model may
+occasionally struggle to maintain visual consistency for recurring characters or
+brand elements across multiple generations."* Which is exactly the case when the
+operator says, as this packet's edit request does, *"Same headline, same photo
+direction. Fix the two pins and nothing else."*
+
+Note two costs. Edits are dearer on input, because gpt-image-2 always processes
+image inputs at high fidelity — and for the same reason `input_fidelity` is
+omitted, since the API does not allow changing it for this model.
+
+### Quality: cheap while iterating, high for keepers
+
+The docs are direct: *"Use `quality: "low"` for fast drafts, thumbnails, and quick
+iterations… before you move to medium or high for final assets."* At 1024x1024,
+low is **196 output tokens**.
+
+So Gate 0 iterates prompt wording at `low` and generates the twenty keepers at
+`high`. The quality is a parameter on the run, not a constant, so the same code
+produces a draft or a deliverable.
+
+### Failures the agent can act on
+
+Image failures split in two, and treating them alike would be a bug:
+
+| Kind | Response |
+|---|---|
+| `429`, `5xx` | Transient. Retry with backoff. |
+| `error.type = "image_generation_user_error"` | **Never auto-retry.** The request itself has to change. |
+
+`error.code` is the stable discriminator, so `generate_plate` branches on it rather
+than on message text. When it is `moderation_blocked`, the error carries
+`moderation_details` with a `moderation_stage` of `input`, `output` or `unknown`
+and coarse `categories`.
+
+The tool turns that into a composed `isError: true` result: which stage blocked,
+which categories, and what to change. The agent then revises its own prompt in the
+same run — which is the loud-failure property applied to a failure mode a blind
+retry would have burned money on. A jobsite or construction prompt is the realistic
+candidate; `moderation: "low"` exists if it becomes a problem, and is not used by
+default.
+
 The split follows the brief's rule about where checks belong. The size
 arithmetic has exact answers, so software owns it and the tool refuses an
 impossible canvas with the numbers in the error message. Whether the ad is any
@@ -914,7 +985,7 @@ with the infrastructure; four RLS checks replace them, and they matter more.
 | 4 | **A run writes to another revision.** The claim scoping is only real if the policy actually refuses. | With a run JWT for revision A, attempt an insert and an upload for revision B and assert both are **denied**. Asserting the denial, not the permission. |
 | 5 | **A run reads another kit's assets.** This is the cross-tenant leak. | With an Emplifi run JWT, select the mis-tagged asset and assert zero rows. Then relax the policy and watch the same test fail. |
 | 6 | **Deploy recording lost.** Playwright flushes video on `context.close()`; a killed box loses it, and no recording means no deploy. | Recording uploaded and its row inserted *before* the run completes. A deploy run without one **cannot reach `completed`**. |
-| 7 | **Signed URLs expire mid-run.** A twelve-minute run with five-minute URLs fails on a late fetch. | Expiry exceeds max run duration; the E2B sandbox timeout is set explicitly above it. Proven by a deliberately slow run. |
+| 7 | **Signed URLs expire mid-run.** The docs warn a complex prompt can take **up to two minutes**, so four canvases is potentially eight minutes of image calls before rendering and saving. A five-minute URL is not close to enough. | Signed URLs and the sandbox timeout are both set from a **20-minute** budget, not a guess. Proven by a deliberately slow run. |
 | 8 | **Soft-deleted objects are never removed.** Marking a row hidden does nothing to the bytes. | A `pg_cron` cleanup removes objects for rows deleted beyond the retention window, verified by running it rather than by trusting it exists. |
 | 9 | **A tenant name reaches the source tree.** | CI greps for tenant names outside fixtures and tests and fails the build. |
 | 10 | **Input software cannot read passes quietly.** An SVG with no intrinsic size, a font filename we cannot index, a palette in Pantone. | A third outcome. `unverifiable` is reported and surfaced by `unverified()`, so "nothing failed" and "nothing was checked" cannot look alike. |
