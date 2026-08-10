@@ -1020,246 +1020,151 @@ Bracketed numbers are the stage that builds that piece.
 
 ### Stage 0 — Gate 0: ads worth defending *(next)*
 
-**Purpose.** Prove the skill produces work a customer would accept, locally,
-before any infrastructure exists to blame.
+Resolve the brand data, build the plate call and the overlay, render to PNG, look
+at it. Twenty ads across both brands.
 
-**Do**
-1. Resolve and record the brand data — one value per conflict, and the class-2
-   answers for the missing reverse logo and the missing condensed face.
-2. Build the plate call: target canvas → legal gpt-image-2 size → generate →
-   uniform downscale → exact-dimension output.
-3. Build the overlay: one fixed canvas root, positioned text, logo at natural
-   proportions, `data-cq-role` attributes, `@font-face` with `file://` sources.
-4. Render to PNG at exact canvas bounds.
-5. **Look at it.** Headline legible across the room, copy on quiet ground, logo
-   surviving its background, CTA obviously the thing to click.
-6. Twenty ads across both brands and every producible size.
-
-**Why here.** It needs no AWS, so it costs the infrastructure work nothing, and
-everything downstream is undebuggable until this is dull.
-
-**Done when** the evaluation layer passes against real renders rather than
-fixtures, and the ads are ones we would defend out loud.
+**Stack** TypeScript · gpt-image-2 · Playwright — all local.
+**Why** No AWS, so it costs the infrastructure work nothing. gpt-image-2 is
+required by the brief; Playwright is the same renderer the sandbox will use, so
+nothing is thrown away.
 
 ---
 
 ### Stage 1 — Automate the checks
 
-**Purpose.** Make the evaluation layer run without anyone remembering to.
+Actions on pull request: typecheck, lint, the suite, the tenant-name grep.
 
-**Do.** GitHub Actions on pull request: typecheck, lint, the full suite, and the
-tenant-name grep.
-
-**Why here.** Roughly half an hour, and from this point every later stage is
-graded on the way in rather than at the end.
-
-**Done when** a pull request that introduces a tenant name into source fails.
+**Stack** GitHub Actions.
+**Why** Already attached to the repo, and no runner to maintain.
 
 ---
 
 ### Stage 2 — Terraform bootstrap, by hand, once
 
-**Purpose.** Create the two things Terraform cannot create for itself.
+The state bucket and the OIDC deploy role — the two things Terraform cannot
+create for itself.
 
-**Do.** State bucket with versioning and `use_lockfile = true`; GitHub OIDC
-provider; a deploy role whose trust policy is scoped to this repository and ref.
-
-**Why here.** Terraform cannot provision the bucket that holds its own state, and
-no AWS keys should ever sit in the repository, so OIDC has to exist before any
-pipeline does.
-
-**Done when** two concurrent plans produce a lock error, and the trust policy
-names this repo and no other.
+**Stack** Terraform ≥ 1.11 · S3 backend with `use_lockfile` · GitHub OIDC.
+**Why** Native S3 locking removes the DynamoDB table the old pattern needed. OIDC
+means no long-lived AWS keys ever sit in the repo.
 
 ---
 
 ### Stage 3 — Terraform the whole stack, one apply
 
-**Purpose.** Stand up everything a run will need, in one shot.
+Apply the inventory under [Terraform](#terraform).
 
-**Do.** Apply the full inventory under [Terraform](#terraform) — networking,
-compute and data, edge, buckets, IAM. That section is the single list, with the
-reason each awkward item is there; it is not repeated here so the two cannot
-drift.
-
-**Why here.** A delivery pipeline needs its whole target to exist; phasing the
-infrastructure means building the pipeline twice.
-
-**Done when** a request through the distribution reaches the application — which
-proves the VPC origin, the ALB security group and the private subnet routing all
-at once.
+**Stack** VPC · NAT · VPC endpoints · RDS Postgres · S3 · internal ALB · EC2 ·
+CloudFront VPC origin · Secrets Manager · IAM.
+**Why** One apply, because a delivery pipeline needs its whole target to exist.
+CloudFront VPC origin so the load balancer stays private. Postgres because it
+carries the state *and* the queue.
 
 ---
 
 ### Stage 4 — The application, and the pipeline that ships it
 
-**Purpose.** Create the app every later stage extends, and the pipeline that puts
-it on the box. Until this stage there is nothing to deploy.
+The Next.js shell, the operator views, the intake and ACK endpoints — then both
+pipelines. Until this stage there is nothing to deploy.
 
-**Do — the application**
-- Next.js project: routing, layout, the API client, and `/health` for the target
-  group to poll.
-- The operator shell: a customer switcher, a run list read from RDS, and an asset
-  view that renders **whatever exists** rather than a fixed grid.
-- Server-side: the request-intake endpoint and the artifact ACK endpoint, with
-  `/api/*` configured for POST through CloudFront.
-
-**Do — the pipelines**
-- *App:* build, tag with the git SHA, push to ECR, SSM Run Command to pull and
-  restart. SSM rather than SSH because EC2 has no public IP.
-- *Sandbox template:* `e2b template build` on changes under `sandbox/`, writing
-  the new template id to Parameter Store so a rebuild needs no code change.
-
-**Why here.** The pipeline has nothing to ship until the application exists, and
-building both together makes the first deploy the first test of the pipeline.
-Everything after this adds screens and endpoints to a running app rather than
-standing up new infrastructure.
-
-**Done when** `describe-instance-information` returns the instance, and a merge to
-`main` puts a page on the box unattended, reachable through CloudFront.
+**Stack** Next.js on EC2 · ECR · SSM Run Command · Parameter Store.
+**Why** Next puts React and the API on one box, so one deploy target instead of
+two. SSM rather than SSH because EC2 has no public IP. The E2B template id lives
+in Parameter Store so a sandbox rebuild needs no code change.
 
 #### The front end, stage by stage
 
-It is a thread rather than a single stage, so here is exactly what appears when.
+A thread rather than a single stage, so here is what appears when.
 
 | Stage | What lands in the UI |
 |---|---|
 | **4** | The shell: layout, routing, customer switcher, run list, empty asset view |
-| **5** | Brain ingest: upload a brain, and the findings report shown *before* anything commits |
-| **6** | The asset view fills in — the first real run's renders, at whatever count it produced |
-| **8** | Run state: partial saves labelled *"saved early"* in amber, delete, re-run |
-| **9** | Chat against a named revision, and the updated asset returning |
-| **10** | Deploy, the recording link, and the verified detail page |
-
-Nothing in it assumes four of anything, which is the property the arbitrary-output
-rule exists to protect.
+| **5** | Brain ingest: upload, and the findings report shown *before* anything commits |
+| **6** | The asset view fills in, at whatever count the run produced |
+| **8** | Run state: partial saves labelled *"saved early"*, delete, re-run |
+| **9** | Chat against a named revision |
+| **10** | Deploy, the recording link, the verified detail page |
 
 ---
 
 ### Stage 5 — Brain ingest
 
-**Purpose.** Give a brand a way into the system.
+Upload a brain, store every object at `<kit-id>/<path>`, write the kit, asset and
+font rows, show the findings report before committing.
 
-**Do.** Upload a brain from the front end or the CLI. Store every object at
-`<kit-id>/<path within the brain>`, write the kit, asset and font rows, and show
-the findings report before committing. Adding assets to an existing kit is the
-same path.
-
-**Why here.** No run can pull a brain that was never loaded, and this path *is*
-the third-brand test — the day-two brain is this stage plus a task.
-
-**Done when** a brand that exists nowhere in the packet ingests with no code
-change, and the findings report names what it could not reconcile.
+**Stack** `planIngest` (already built) · S3 · RDS.
+**Why** A pure planner needs no bucket and no database to test, so the logic was
+verifiable before either existed.
 
 ---
 
 ### Stage 6 — One real sandbox run, end to end
 
-**Purpose.** Prove the hydration path with a live box, once, before building
-anything on top of it.
+Hydrate a box, pull the brain fresh, generate, save, kill it.
 
-**Do.** Render a hydration file from rows · create a box carrying only an opaque
-run id · write `HYDRATION.md` in · pull the brain fresh · generate · save through
-`save_work` and ACK each artifact · `finish_run` · kill the box.
-
-**Why here.** Every later stage is a variation on this event. Debugging it once, in
-isolation, is far cheaper than debugging it inside concurrency.
-
-**Done when** fonts do not silently fall back, an ACK arrives from outside the
-VPC, and presigned URLs outlive a deliberately slow run.
+**Stack** E2B · Claude Agent SDK · `save_work` · scoped STS.
+**Why** E2B is a plain sandbox provider rather than a managed-agent platform,
+which the brief warns costs day two. The Agent SDK gives in-process tools and the
+hooks durability depends on. STS scoped to one revision prefix keeps blast radius
+to one prefix.
 
 ---
 
 ### Stage 7 — Sandbox evaluation layer
 
-**Purpose.** Extend the evaluation layer to things only a live box can prove. The
-local suite cannot reach any of this, and the stages after it are exactly where
-quiet failures hide.
+Tests for what only a live box can prove: hydration fidelity digest for digest,
+credentials *denied* another revision's prefix, key-equals-relative-path,
+font provenance in a real render, durability across a mid-run kill.
 
-**Do.** Build the harness and the first tests against real boxes:
-- **Hydration fidelity** — what landed in `/work` matches what the hydration file
-  named, digest for digest, and nothing else arrived.
-- **Isolation** — a box's environment carries no tenant or kit string; its
-  credentials cannot read another revision's prefix. Assert the *denial*, not just
-  the permission.
-- **Tree mirroring** — every saved object's key equals its path relative to
-  `/work`, so rehydration is a sync.
-- **Font provenance in a real render** — computed `font-family` on every text node
-  came from the brain. This is the check that fails silently otherwise.
-- **Save durability** — kill a box mid-run and assert every ACKed artifact is
-  intact and every unverified one is absent.
-
-**Why here.** The same reason the local layer came before Gate 0: the harness has
-to exist before the stages it grades. Written now, it catches the engine, the chat
-surface and deploy as they land, instead of after.
-
-**Done when** each of those has a test that fails when deliberately broken — a
-weakened credential policy, a mangled hydration file, a font left out of
-fontconfig.
+**Stack** Vitest · E2B SDK.
+**Why** The same runner as the local layer, so one command covers both and there
+is no second harness to learn.
 
 ---
 
 ### Stage 8 — The engine
 
-**Purpose.** The part graded hardest: many runs, arbitrary order, nothing crossing.
+Concurrency to the cap, resume, retry, partial saves, soft delete, re-run.
 
-**Do.** Concurrency to the named cap via `FOR UPDATE SKIP LOCKED` · resume as a
-fresh box rehydrating from the tree · retry reusing verified artifacts · partial
-saves · soft delete · re-run regenerating from scratch.
-
-**Why here.** It needs one proven run underneath it and a harness above it.
-
-**Done when** a box killed mid-run is replaced by a new one that continues, and a
-retry re-bills no successful image call.
+**Stack** Postgres `FOR UPDATE SKIP LOCKED` · E2B lifecycle API.
+**Why** The runs table is already the queue, so the cap is a `count(*)` and no
+queue service is needed. Asking E2B whether a sandbox still exists is
+authoritative, where a heartbeat only proves the box was alive some seconds ago.
 
 ---
 
 ### Stage 9 — Chat surface
 
-**Purpose.** Let a human say what is wrong and have it reach the right agent.
+A message against a named revision reaches the agent, and the updated asset
+returns.
 
-**Do.** A message against a named revision becomes a row, hydrates into a new
-run's file, reaches the agent with the right tenant, task and revision, and the
-updated asset returns.
-
-**Why here.** It is the first thing that needs the engine's revision lineage to
-already work.
-
-**Done when** a message round-trips with nothing touched in between.
+**Stack** Next.js · RDS.
+**Why** Chat rather than pins because the graded part is whether the message
+hydrates to the right tenant, task and revision — identical either way — and the
+hours saved go to deploy.
 
 ---
 
 ### Stage 10 — Deploy *(automatic disqualifier if unfinished)*
 
-**Purpose.** Land the ad in the marketing tool and verify it actually landed.
+Drive Adstream, save the recording, read the detail page back.
 
-**Do.** Agent-driven computer use against Adstream — Playwright actuates, the
-agent decides from each screenshot. Handle the normalised name, the conditionally
-disabled Next button, the two-to-nine-second publish, and the toast that outlives
-its page. Save the recording. Read the detail page back.
-
-**Why here.** It reuses the same box, the same tree and the same save path, so it
-is small by the time we arrive — and it is scheduled with room in front of it
-because arriving late is a disqualifier.
-
-**Done when** a deploy fired from the front end ends on a verified detail page
-with a recording, and a run without a recording artifact cannot reach
-`completed`.
+**Stack** Playwright in the sandbox, agent-driven.
+**Why** Playwright is already in the template for rendering, so deploy adds no new
+dependency. The agent decides from each screenshot rather than following a
+selector script, because the graded test is resilience to a UI change.
 
 ---
 
 ### Stage 11 — Evidence
 
-**Purpose.** Make the claims checkable by someone who does not trust them.
+Plant a leak and catch it, then weaken the filter and watch the same check fail.
+Kill a box and resume. Run the interleaved concurrent case. Take a third brain
+through untouched.
 
-**Do.** Plant a leak and catch it, then weaken the filter and watch the same check
-fail · kill a box and resume · run the interleaved concurrent case with different
-inspirations in flight · take a third brain through new-task-then-edit untouched.
-
-**Why here.** It is the only stage that needs everything else finished.
-
-**Done when** each demonstration has been performed and recorded, including the
-ones where a detector was deliberately broken to prove it can see.
+**Stack** The suites from stages 1 and 7.
+**Why** Nothing new to build — both harnesses already exist, which is the point of
+having built them first.
 
 ## The engine
 
