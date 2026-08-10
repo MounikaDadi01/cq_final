@@ -111,7 +111,7 @@ valid file immediately, which is how the third-brand test passes by
 construction.
 
 The rendered file is persisted to S3 at
-`s3://cq-work/<run-id>/HYDRATION.md`, byte-identical to what was written into
+`s3://cq-work/<task-id>/rev-<n>/HYDRATION.md`, byte-identical to what was written into
 the box, as the run's replayable recipe. That is what makes resume a replay
 rather than a reconstruction, and it is also the audit record of exactly what a
 run was told.
@@ -129,7 +129,7 @@ and nothing else does:
 | Fetched per run | `brain/brand/*.svg` — **only** assets whose `kit_id` equals the run's kit | Filtered at render time |
 | Fetched per run | `brain/fonts/*` — the whole directory for that kit | No filtering, no parsing |
 | Fetched per run | `inspirations/*` — **only** filenames the request names | Empty list means none |
-| Fetched per run (edits) | Parent plate and parent HTML for the canvases being edited | From the parent revision's artifacts |
+| Fetched per run (edits) | Parent plate and parent HTML for the canvases being edited | Synced from `rev-<n-1>/` to `/work/parent/` at the same relative paths |
 | Written in | `HYDRATION.md` | Backend writes it via the E2B filesystem API |
 
 Three filters do the real work, and each maps to a constraint:
@@ -224,6 +224,80 @@ that already succeeded.
 
 The agent moves its own work. Nothing else does.
 
+### One tree, in and out
+
+Everything is a file system, which means the thing that comes out has to be the
+same shape as the thing that went in. Not a bucket of opaque keys with a database
+holding the meaning — a directory tree, laid out the way the brain is laid out and
+the way SKILL.md already names its output.
+
+**The storage key is the relative path.** Nothing invents an identifier:
+
+```
+s3://cq-brains/<kit-id>/<path within the brain>
+s3://cq-work/<task-id>/rev-<n>/<path within the project>
+```
+
+So `/work/html_portrait/assets/plate.png` lands at
+`…/rev-4/html_portrait/assets/plate.png`, and never anywhere else. `save_work`
+mirrors, it does not translate.
+
+The work tree uses SKILL.md's own convention — *"Save each plate under
+`html_<slug>/assets/`"* — rather than one we made up:
+
+```
+<task-id>/rev-4/
+  HYDRATION.md              the recipe this revision was built from
+  RESULT.json               the index of what it produced
+  html_square/
+    index.html
+    assets/plate.png
+  html_portrait/
+    index.html
+    assets/plate.png
+  renders/
+    square.png
+    portrait.png
+  recordings/
+    deploy.webm
+  transcript/
+    session.jsonl
+```
+
+Inside the box, both trees land where their names say:
+
+```
+/work/
+  HYDRATION.md
+  brain/            an exact mirror of cq-brains/<kit-id>/
+  inspirations/     only the filenames the request names
+  parent/           an exact mirror of rev-<n-1>/, on an edit
+  html_<slug>/      the output, mirroring what gets saved
+  renders/
+  RESULT.json
+```
+
+Three things fall out of this, and they are the reason it is worth being strict
+about:
+
+- **Resume is a sync, not a reconstruction.** Rehydrating means copying a prefix
+  back into `/work`. The layout is byte-identical, which is what makes "the agent
+  picks up as if the files were never deleted" literally true rather than
+  approximately true.
+- **An edit is the same operation.** The parent revision syncs to `/work/parent/`
+  by the same rule, at the same relative paths.
+- **The bucket is browsable.** A task's history reads as directories, so a person
+  can see what a revision contained without querying anything.
+
+`RESULT.json` uses the same vocabulary as the manifest it faces across the
+boundary — entries keyed by `kind` and `path`, exactly as `asset_manifest.json`
+describes staged input. One index format going in, the same index format coming
+out.
+
+The STS session is scoped to `s3://cq-work/<task-id>/rev-<n>/*`. One revision is
+produced by one run at a time, so the blast radius stays a single prefix while the
+path itself remains addressable by revision rather than by an opaque run id.
+
 ### `save_work` is the mechanism
 
 The agent is given a script and told it exists. It decides when to run it and
@@ -254,7 +328,7 @@ one exists, and plates are saved before the tool returns them to the model,
 because the brief's own failure case is a box killed at minute nine with a billed
 image call already succeeded. Same actor, same mechanism, tighter cadence.
 
-- The backend mints an STS session scoped to `s3://cq-work/<run-id>/*` via a
+- The backend mints an STS session scoped to `s3://cq-work/<task-id>/rev-<n>/*` via a
   session policy with a short TTL, passed into the sandbox as environment.
   Blast radius is exactly one prefix.
 - The agent writes plates, rendered PNGs, HTML projects, its own transcript,

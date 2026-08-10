@@ -1,6 +1,6 @@
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync, cpSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, sep } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
 import {
   availableAssets,
@@ -119,10 +119,17 @@ describe('every brain in the packet ingests', () => {
     expect(plan.fonts.length).toBeGreaterThan(0)
   })
 
-  it.each(packetBrains)('$slug stores every file under its kit prefix', (brain) => {
+  it.each(packetBrains)('$slug mirrors every path exactly under its kit', (brain) => {
     const plan = planIngest(brain.dir)
     for (const object of plan.objects) {
-      expect(object.storageKey.startsWith(`${brain.kitId}/`)).toBe(true)
+      // The storage key IS the relative path. Nothing invents an identifier, so
+      // the tree in the bucket and the tree on disk are the same tree — which is
+      // what makes rehydration a sync rather than a reconstruction.
+      const relative = object.sourcePath
+        .slice(brain.dir.length + 1)
+        .split(sep)
+        .join('/')
+      expect(object.storageKey).toBe(`${brain.kitId}/${relative}`)
       expect(object.sha256).toMatch(/^[0-9a-f]{64}$/)
       expect(object.bytes).toBeGreaterThan(0)
     }
