@@ -550,6 +550,66 @@ Observability stays thin on purpose: one CloudWatch log group, a `/health`
 endpoint for the target group, run transcripts in S3, and run state visible in
 the UI.
 
+## Brain ingest
+
+A brand has to get into the system before a run can pull it, and on day two an
+unseen brain arrives. Ingest is that path: **add a company, or add assets to a
+company that already exists.**
+
+Two entry points, one routine. The front end takes an upload — a brain directory
+or an archive — and shows the findings report before anything is committed. The
+same routine is available as a CLI for loading a brain from disk.
+
+The work is a pure planner, `planIngest(dir)`, which returns the objects to
+upload, the rows to write, and what is wrong with the input. It touches no bucket
+and no database, so it is testable before either exists and the backend's job
+reduces to executing a plan.
+
+### Identity comes from the manifest
+
+The kit id is read from `asset_manifest.json`, never from the folder name, and
+every object lands under `<kit_id>/<path within the brain>`. This packet is the
+argument: it contains an asset whose folder and whose kit disagree, and trusting
+the folder is how a competitor's mark reaches the wrong canvas.
+
+### Foreign assets are quarantined, not dropped
+
+An asset tagged to a kit other than the manifest's own is stored and recorded but
+marked unavailable, so it can never be offered to this kit. Storing it preserves
+the evidence; withholding it stops the leak.
+
+That makes ingest a **third independent gate**, alongside the hydration filter
+and the ACK check. A mis-tagged asset has to get past all three.
+
+### The findings report
+
+Findings are produced once, at ingest, rather than rediscovered by every run.
+Each is generic — no rule names a customer.
+
+| Code | Severity | Meaning |
+|---|---|---|
+| `kit-id-from-manifest` | info | Records where identity came from |
+| `folder-name-differs-from-kit` | info | Folder and kit disagree; the manifest governs |
+| `withheld-from-runs` | info | Stored for the record, never hydrated — the token cache |
+| `asset-missing-file` | review | Listed in the manifest, no file behind it |
+| `asset-foreign-kit` | review | Quarantined cross-tenant asset |
+| `font-substituted` | review | A declared family resolved to a nearest shipped family |
+| `font-unresolvable` | review | Nothing shipped matches; fallback is not the brand |
+| `token-cache-conflict` | review | The cache disagrees with `DESIGN.md`, which wins |
+| `no-design-doc` / `no-asset-manifest` / `no-kit-id` | blocked | The kit has no brand or no identity |
+
+Only `blocked` stops an ingest. A `review` finding is surfaced to the operator
+and recorded against the kit, because these are the conditions a person should
+decide about rather than a machine silently absorbing them.
+
+### Adding assets later
+
+Re-ingesting a kit picks up new manifest entries and new files under the same kit
+id. Objects are digested on the way in, so an artifact can record which byte
+sequence it was built from. No version graph — S3 versioning retains the history
+and each artifact records the digest it used, which is traceability without the
+time a graph would cost.
+
 ## Functional verification
 
 Ten things that would look correct on paper and fail in practice. Each is paired
@@ -607,22 +667,28 @@ origin and two cache behaviours, Secrets Manager, IAM roles. Proven by check 6.
 SSM Run Command to pull and restart. Template: `e2b template build` on
 `sandbox/` changes, id to Parameter Store. Proven by check 3.
 
-**Stage 5 — One real run, end to end.** Render a hydration file from rows, write
-it into a box, pull a brain fresh, generate, save through the ACK path, kill the
-box. Proven by checks 5 and 7.
+**Stage 5 — Brain ingest.** Upload a brain from the front end or the CLI, store
+every object under its kit prefix, write the kit, asset and font rows, and show
+the findings report. Nothing downstream can run without a brand in the database,
+and the third-brand test is this path plus a task. Proven by ingesting a brain
+that does not exist in the packet.
 
-**Stage 6 — The engine.** Concurrency to the named cap, resume after a kill,
+**Stage 6 — One real run, end to end.** Render a hydration file from rows, write
+it into a box, pull a brain fresh, generate, save through the ACK path, kill the
+box. Proven by checks 1, 5 and 7.
+
+**Stage 7 — The engine.** Concurrency to the named cap, resume after a kill,
 retry after a crash, partial saves, soft delete, re-run.
 
-**Stage 7 — Chat surface.** A message reaching the agent attached to the right
+**Stage 8 — Chat surface.** A message reaching the agent attached to the right
 tenant, task and revision, and the updated asset returning with no manual step.
 
-**Stage 8 — Deploy.** Agent-driven computer use against Adstream, recording
+**Stage 9 — Deploy.** Agent-driven computer use against Adstream, recording
 saved, detail page read back as the only source of truth. Proven by check 4.
 This is an automatic disqualifier if unfinished, so it is a deadline rather than
 a finish.
 
-**Stage 9 — Evidence.** Plant a leak and catch it, kill a box and resume, run
+**Stage 10 — Evidence.** Plant a leak and catch it, kill a box and resume, run
 the interleaved concurrent case with different inspirations, take a third brain
 through unchanged.
 
