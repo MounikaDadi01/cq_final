@@ -286,13 +286,21 @@ Five layers, in order of what they protect:
    Everything already ACKed is reused on retry; anything unverified is
    regenerated.
 
-E2B's own `lifecycle.onTimeout: "pause"` is configured as a soft landing, so a
-timeout preserves filesystem and memory instead of destroying them, and resume
-costs about a second. It is deliberately **not** the durability mechanism: it
-covers timeout but not `kill()` or infrastructure failure, and there is a
-reported issue where filesystem changes stop persisting after the second
-resume. Pause/resume is treated as a speed optimisation for the resume path,
-never as the thing that keeps work safe.
+**A box is never kept alive.** `lifecycle.onTimeout` is `kill`, and a completed
+run's box is killed as soon as the agent's `finish_run` lands. Sandbox
+pause and resume is not used at all.
+
+An earlier draft configured pausing as a "soft landing" on timeout. That was
+wrong on both counts. The behaviour the brief actually tests is *kill the box,
+spin a new one, rehydrate* — so reviving a paused box demonstrates nothing, and
+paused sandboxes are retained indefinitely, which is the "why don't we just keep
+the box running" the brief rules out.
+
+**Resume is always a fresh box.** It rehydrates from S3 and the run table, and
+what makes it cheap is `resume.already_durable[]`: every artifact the previous
+attempt verified is listed and must not be regenerated, so a successful image
+call is never billed twice. Preserving what the agent already made is the
+write-through ACK path's job, not a sandbox feature's.
 
 ## Brand data resolution
 
