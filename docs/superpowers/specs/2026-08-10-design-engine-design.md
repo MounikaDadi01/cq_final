@@ -68,9 +68,9 @@ Three kinds of data go into a box. They look alike and are not.
 
 | Lifetime | Contents | Path in |
 |---|---|---|
-| Same every run | SKILL.md, contracts, renderer, Playwright, fonts runtime, save-out CLI | Baked into the E2B template |
+| Same every run | SKILL.md, contracts, renderer, Playwright, fonts runtime, `save_work` script | Baked into the E2B template |
 | Same per customer | The brain: `DESIGN.md`, `fonts/`, asset manifest, logos | Pulled fresh from S3 every run, never baked |
-| One job | Request, copy, comments, revision lineage | Job manifest fetched from S3 at boot |
+| One job | Request, copy, messages, revision lineage | `HYDRATION.md` written in at boot |
 
 The brain is never baked. That is what makes a rebrand not need a rebuild.
 
@@ -88,8 +88,8 @@ renders whatever exists rather than a fixed grid. Nothing in the storage model,
 the hydration file, or the UI assumes four of anything.
 
 **The box boots holding only an opaque run id.** No tenant in its name, tags,
-or metadata. It learns which brand it serves by fetching the job manifest, then
-pulls that brand's kit. A box that already knows its tenant is the failure this
+or metadata. It learns which brand it serves by reading the hydration file, then
+pulls that brand's kit fresh. A box that already knows its tenant is the failure this
 design exists to prevent.
 
 Asset resolution filters on `brand_kit_id`, never on the folder a file happens
@@ -123,7 +123,7 @@ and nothing else does:
 
 | Source | Files | How |
 |---|---|---|
-| Baked in the template | `SKILL.md`, prompt preamble, renderer, Playwright + browsers, `save_artifact` CLI, Agent SDK | Built into the E2B image |
+| Baked in the template | `SKILL.md`, prompt preamble, renderer, Playwright + browsers, `save_work` script, Agent SDK | Built into the E2B image |
 | Fetched per run | `brain/DESIGN.md` | Presigned, digest-checked |
 | Fetched per run | `brain/brand/asset_manifest.json` | Presigned, digest-checked |
 | Fetched per run | `brain/brand/*.svg` — **only** assets whose `kit_id` equals the run's kit | Filtered at render time |
@@ -224,6 +224,36 @@ that already succeeded.
 
 The agent moves its own work. Nothing else does.
 
+### `save_work` is the mechanism
+
+The agent is given a script and told it exists. It decides when to run it and
+what to pass. This is deliberately a plain executable rather than only a tool
+call: it is inspectable by hand inside the box, which is how it gets debugged,
+and it does not depend on MCP plumbing to function.
+
+```
+save_work --kind plate|render|html|recording|result \
+          --canvas portrait \
+          --path /work/html_portrait/assets/plate.png \
+          [--revision 4] [--meta key=value ...]
+
+save_work --kind render --glob '/work/out/*.png'
+```
+
+It documents itself through `--help`, accepts a glob so an arbitrary number of
+outputs saves in one call, is idempotent by digest so a repeat is free, and exits
+non-zero with a reason the agent can read and act on in the same run.
+
+The `save_artifact` tool wraps the same code path so a failure also arrives as a
+structured tool result. One implementation, two front doors — the script is the
+one that matters.
+
+**Cadence is the one place this differs from the camp it belongs to.** The obvious
+shape is to generate everything and then save once. We save per artifact as each
+one exists, and plates are saved before the tool returns them to the model,
+because the brief's own failure case is a box killed at minute nine with a billed
+image call already succeeded. Same actor, same mechanism, tighter cadence.
+
 - The backend mints an STS session scoped to `s3://cq-work/<run-id>/*` via a
   session policy with a short TTL, passed into the sandbox as environment.
   Blast radius is exactly one prefix.
@@ -241,6 +271,22 @@ and reading durable storage is not reaching into a sandbox.
 
 There is no terminal manifest. Completion is a state transition in RDS driven
 by the last ACK, so no single file can strand a run's output.
+
+### `RESULT.json` is a report, not a mechanism
+
+SKILL.md requires it — staged project paths, the rendered PNG per canvas size, a
+completion or escalation status, and any brand value that could not be reconciled
+together with what was used instead — so it gets written and saved like any other
+artifact.
+
+What it is not is load-bearing. Every artifact is durable and already has a row
+before `RESULT.json` exists, so a box that dies before writing it strands
+nothing. That is the difference between this and the method where a backend reads
+a file to discover what a run produced.
+
+The line that keeps it sharp: **the backend may read `RESULT.json` for its
+content** — to show an operator the escalations — **but never for discovery.**
+Reading durable storage is fine; depending on a file to know what exists is not.
 
 ### How the sandbox reaches the API
 
@@ -461,12 +507,10 @@ in-process SDK MCP server, registered through `mcpServers` and pre-approved in
 | `generate_plate` | Maps target canvas to a legal gpt-image-2 size, generates, downscales uniformly, **saves and ACKs before returning**, and returns the plate as an image block so the model sees it |
 | `render_canvas` | Playwright renders the HTML overlay to PNG at exact canvas bounds |
 | `look_at_render` | Returns the rendered PNG as an image block for the mandatory visual judgement |
-| `save_artifact` | Uploads, verifies, ACKs, and returns any rejection as text the model can act on |
+| `save_artifact` | Thin wrapper over the `save_work` script, so a rejection also arrives as a structured tool result |
 
-`save_artifact` is also baked into the image as a plain CLI the agent can invoke
-from Bash with arguments. Same code path, two front doors: the tool gives
-structured errors the model reads, and the script keeps the save mechanism
-inspectable by hand inside the box, which is how it gets debugged.
+The save mechanism is the `save_work` script, documented under Save-out. The tool
+is a wrapper over it rather than the other way round.
 
 An attached inspiration is passed into the `generate_plate` call as reference
 imagery alongside the brand colours, which is what it is for. It never
