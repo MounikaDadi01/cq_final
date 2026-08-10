@@ -41,6 +41,19 @@ export interface Brain {
   fonts: FontFile[]
   assets: BrandAsset[]
   designDoc: string
+
+  /**
+   * Input we could not turn into machine-readable values.
+   *
+   * These exist so nothing is dropped silently. A brand naming its colours in
+   * Pantone, or shipping `Family-Regular.ttf` instead of `family_400_normal.ttf`,
+   * is not broken — it is just not comparable by software. The files still
+   * hydrate in full and the agent still reads `DESIGN.md`; what changes is that
+   * checks depending on these values report *unverifiable* rather than passing
+   * for the wrong reason.
+   */
+  unparsedFonts: string[]
+  unparsedPalette: Record<string, string>
 }
 
 /** #abc and #AABBCC both normalise to #AABBCC. */
@@ -113,18 +126,24 @@ export function loadBrain(dir: string): Brain {
 
   const rawPalette = readSection(designDoc, 'Palette')
   const palette: Record<string, string> = {}
+  const unparsedPalette: Record<string, string> = {}
   for (const [k, v] of Object.entries(rawPalette)) {
     const hex = normaliseHex(v)
     if (hex) palette[k] = hex
+    else unparsedPalette[k] = v
   }
 
   const fontsDir = join(dir, 'fonts')
-  const fonts: FontFile[] = existsSync(fontsDir)
-    ? readdirSync(fontsDir)
-        .filter((f) => /\.(ttf|otf|woff2?)$/i.test(f))
-        .map((f) => parseFontFile(f, fontsDir))
-        .filter((f): f is FontFile => f !== null)
+  const fontFiles = existsSync(fontsDir)
+    ? readdirSync(fontsDir).filter((f) => /\.(ttf|otf|woff2?)$/i.test(f))
     : []
+  const fonts: FontFile[] = []
+  const unparsedFonts: string[] = []
+  for (const file of fontFiles) {
+    const parsed = parseFontFile(file, fontsDir)
+    if (parsed) fonts.push(parsed)
+    else unparsedFonts.push(file)
+  }
 
   const manifestPath = join(dir, 'brand', 'asset_manifest.json')
   let kitId = ''
@@ -157,7 +176,103 @@ export function loadBrain(dir: string): Brain {
     fonts,
     assets,
     designDoc,
+    unparsedFonts,
+    unparsedPalette,
   }
+}
+
+/** True when the palette cannot be compared by software at all. */
+export function paletteIsMachineReadable(brain: Brain): boolean {
+  return Object.keys(brain.palette).length > 0
+}
+
+/** True when some palette entries resisted parsing, so absence proves nothing. */
+export function paletteIsPartial(brain: Brain): boolean {
+  return Object.keys(brain.unparsedPalette).length > 0
+}
+
+export interface ScaleResolution {
+  key: string
+  value: string
+  source: 'prose' | 'table'
+  /** True when the document asserts two different values for the same key. */
+  contested: boolean
+  detail?: string
+}
+
+/**
+ * Resolves a type-scale value when `DESIGN.md` contradicts itself.
+ *
+ * The precedence is SKILL.md's, not ours: the prose under *Applying it* is "as
+ * binding as the numbers above them", and a statement scoped to every canvas is
+ * more specific than a table entry. Where the prose asserts a value for a key
+ * the table also states, the prose governs.
+ *
+ * Ties break deterministically on document order, so the same brain always
+ * resolves the same way and a run is reproducible. Which value wins matters far
+ * less than the resolution being recorded and repeatable.
+ */
+export function resolveScaleValue(brain: Brain, key: string): ScaleResolution | null {
+  const tableValue = brain.typeScale[key.toLowerCase()]
+  const proseValues = proseAssertionsFor(brain, key)
+
+  if (proseValues.length === 0) {
+    if (tableValue === undefined) return null
+    return { key, value: tableValue, source: 'table', contested: false }
+  }
+
+  // First occurrence in document order is the deterministic winner.
+  const prose = proseValues[0]
+  const contested = tableValue !== undefined && tableValue !== prose
+  return {
+    key,
+    value: prose,
+    source: 'prose',
+    contested,
+    detail: contested
+      ? `table says ${tableValue}, prose says ${prose}; prose governs and is more specific`
+      : undefined,
+  }
+}
+
+/**
+ * Finds values the prose asserts for a scale key, in document order.
+ *
+ * Narrow by design: it looks for the key followed shortly by a pixel value. It
+ * is only ever used to *report* a contradiction and to break a tie the same way
+ * twice — the agent is what actually interprets the brand.
+ */
+function proseAssertionsFor(brain: Brain, key: string): string[] {
+  const applying = sectionBody(brain.designDoc, 'Applying it')
+  if (!applying) return []
+  const pattern = new RegExp(`\\b${key.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')}\\b[^.]{0,40}?(\\d+)\\s*px`, 'gi')
+  const out: string[] = []
+  for (const match of applying.matchAll(pattern)) out.push(`${match[1]}px`)
+  return out
+}
+
+/** Raw text of a `## Heading` section, up to the next heading. */
+export function sectionBody(markdown: string, heading: string): string | null {
+  const lines = markdown.split(/\r?\n/)
+  const body: string[] = []
+  let inside = false
+  for (const line of lines) {
+    const h = /^##\s+(.*)$/.exec(line)
+    if (h) {
+      if (inside) break
+      inside = h[1].trim().toLowerCase() === heading.trim().toLowerCase()
+      continue
+    }
+    if (inside) body.push(line)
+  }
+  return inside || body.length > 0 ? body.join('\n') : null
+}
+
+/** Every scale key whose value the document states twice, differently. */
+export function selfContradictions(brain: Brain): ScaleResolution[] {
+  return Object.keys(brain.typeScale)
+    .map((key) => resolveScaleValue(brain, key))
+    .filter((r): r is ScaleResolution => r !== null && r.contested)
 }
 
 /** Every immediate subdirectory holding a DESIGN.md is a brain. */

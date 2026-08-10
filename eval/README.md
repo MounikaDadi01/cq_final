@@ -1,6 +1,6 @@
 # Evaluation layer
 
-Ships before the thing it grades. 83 tests, no browser, no image model, no AWS.
+Ships before the thing it grades. 130 tests, no browser, no image model, no AWS.
 
 ```bash
 cd eval
@@ -17,6 +17,8 @@ npx tsc --noEmit  # typecheck
 | `brain.test.ts` | Brain loading, palette parsing, generic font substitution |
 | `checks.test.ts` | Render checks: dimensions, uniform scale, palette, pixel fidelity, fonts, assets, copy, bounds, overlap, roles |
 | `disqualifiers.test.ts` | Static scanners, one per listed disqualifier with an exact answer |
+| `ingest.test.ts` | Brain ingest planning, including a brand that exists nowhere in the packet |
+| `silent-cases.test.ts` | Input software cannot read — every case that used to pass quietly |
 
 ## Two rules it is built on
 
@@ -36,6 +38,17 @@ The cross-tenant fixture is real rather than synthetic: the packet already ships
 an asset tagged to one kit sitting inside another brain's manifest. `brain.test.ts`
 asserts that hazard still exists, so if the fixture ever disappears the leak test
 fails loudly instead of passing vacuously.
+
+## Three outcomes, not two
+
+`pass`, `fail`, and **`unverifiable`**. The third exists because a check that
+cannot run must say so rather than imply success — an SVG declaring no intrinsic
+size, a font filename we cannot index, a palette written in Pantone. Each of
+those produced a silent pass before, which is the same failure as a detector that
+never fires.
+
+`failures()` returns only real failures. `unverified()` surfaces the gaps, so
+"nothing failed" and "nothing was checked" can never look alike.
 
 ## Checks with exact answers only
 
@@ -63,6 +76,13 @@ apart without either one looking wrong.
   for that needs a real render and lands with the renderer.
 - "A hardcoded ordering." It cannot be settled by reading source. It is proven by
   running the interleaved concurrent case and observing that nothing crossed.
+- **Prose rules inside a token line.** `readSection` strips trailing
+  parentheticals, so a radius written as `12px (CTA buttons are pill-shaped)`
+  loses the pill instruction. That costs the product nothing — the agent reads
+  `DESIGN.md` whole and no backend code parses it — but this suite cannot check
+  pill-versus-square CTAs, and saying so beats implying coverage.
+- **Contrast acceptability.** The ratio is computed and reported by
+  `measureContrast`; whether it is good enough is the model's judgement.
 
 ## Found by these tests already
 

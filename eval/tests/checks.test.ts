@@ -57,7 +57,7 @@ describe('each check catches its planted violation', () => {
   it('canvas dimensions: a render that is not the requested size', () => {
     const { bundle } = buildFixture(brain, canvas)
     const wrong = makePng(canvas.width + 8, canvas.height, groundOf(brain))
-    expect(checkCanvasDimensions(bundle, wrong).ok).toBe(false)
+    expect(checkCanvasDimensions(bundle, wrong).outcome).toBe('fail')
   })
 
   it('plate geometry: a plate that does not fill the canvas', () => {

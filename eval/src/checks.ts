@@ -1,7 +1,7 @@
 import type { Brain } from './brain'
-import { normaliseHex, resolveFamily, slugify } from './brain'
+import { normaliseHex, paletteIsPartial, resolveFamily, slugify } from './brain'
 import type { Box, Raster } from './png'
-import { colourCoverage } from './png'
+import { colourCoverage, contrastRatio, dominantColour } from './png'
 
 /**
  * Checks operate on a normalised bundle rather than driving a browser, so they
@@ -47,14 +47,29 @@ export interface ArtifactBundle {
   requiredStrings: string[]
 }
 
+/**
+ * Three outcomes, not two.
+ *
+ * `unverifiable` exists because a check that cannot run must say so rather than
+ * imply success. A logo whose SVG declares no intrinsic size, a font filename we
+ * cannot index, a palette written in Pantone — each of those used to produce a
+ * silent pass, which is the same failure as a detector that never fires.
+ */
+export type Outcome = 'pass' | 'fail' | 'unverifiable'
+
 export interface Finding {
   check: string
-  ok: boolean
+  outcome: Outcome
   detail: string
 }
 
-const pass = (check: string, detail: string): Finding => ({ check, ok: true, detail })
-const fail = (check: string, detail: string): Finding => ({ check, ok: false, detail })
+const pass = (check: string, detail: string): Finding => ({ check, outcome: 'pass', detail })
+const fail = (check: string, detail: string): Finding => ({ check, outcome: 'fail', detail })
+const unverifiable = (check: string, detail: string): Finding => ({
+  check,
+  outcome: 'unverifiable',
+  detail,
+})
 
 /** The rendered PNG must be exactly the requested canvas. */
 export function checkCanvasDimensions(bundle: ArtifactBundle, raster: Raster): Finding {
@@ -123,28 +138,106 @@ export function checkPlateGeometry(bundle: ArtifactBundle, tolerance = 0.001): F
   return out
 }
 
-/** Every colour the overlay declares must come from this brain's palette. */
+/**
+ * Every colour the overlay declares must come from this brain's palette.
+ *
+ * Absence only proves a violation when the palette parsed completely. A brand
+ * naming colours in Pantone or a colour space we cannot read is not off-brand —
+ * it is unverifiable, and saying so beats failing every check it has.
+ */
 export function checkPaletteConformance(bundle: ArtifactBundle, brain: Brain): Finding[] {
   const allowed = new Set(Object.values(brain.palette))
+  const partial = paletteIsPartial(brain)
+  const unreadable = Object.keys(brain.unparsedPalette)
   const out: Finding[] = []
+
+  for (const el of bundle.overlay) {
+    for (const raw of el.declaredColours ?? []) {
+      const hex = normaliseHex(raw)
+
+      if (hex === null) {
+        out.push(
+          unverifiable(
+            'palette-conformance',
+            `${el.role} declares "${raw}", which is not a comparable colour value`,
+          ),
+        )
+        continue
+      }
+
+      if (allowed.has(hex)) {
+        out.push(pass('palette-conformance', `${el.role} uses ${hex} from the palette`))
+        continue
+      }
+
+      if (allowed.size === 0) {
+        out.push(
+          unverifiable(
+            'palette-conformance',
+            `${el.role} declares ${hex}, but this brain's palette is not machine-readable ` +
+              `(${unreadable.join(', ')}) — the agent must judge it against DESIGN.md`,
+          ),
+        )
+        continue
+      }
+
+      if (partial) {
+        out.push(
+          unverifiable(
+            'palette-conformance',
+            `${el.role} declares ${hex}, which is not among the palette entries we could ` +
+              `parse, but ${unreadable.join(', ')} did not parse — it may be one of those`,
+          ),
+        )
+        continue
+      }
+
+      out.push(
+        fail(
+          'palette-conformance',
+          `${el.role} declares ${hex}, which is not in this brain's palette ` +
+            `(${[...allowed].join(', ')})`,
+        ),
+      )
+    }
+  }
+
+  if (out.length === 0) out.push(pass('palette-conformance', 'no declared colours to check'))
+  return out
+}
+
+export interface ContrastMeasurement {
+  role: Role
+  declaredColour: string
+  behindColour: string
+  ratio: number
+}
+
+/**
+ * Measures declared text colour against what is actually behind it in the render.
+ *
+ * Deliberately returns measurements rather than findings: the ratio has an exact
+ * answer, so software computes it, and whether it is acceptable is left to the
+ * model looking at the render. Nothing here fails a build.
+ */
+export function measureContrast(
+  bundle: ArtifactBundle,
+  raster: Raster,
+): ContrastMeasurement[] {
+  const out: ContrastMeasurement[] = []
   for (const el of bundle.overlay) {
     for (const raw of el.declaredColours ?? []) {
       const hex = normaliseHex(raw)
       if (hex === null) continue
-      if (allowed.has(hex)) {
-        out.push(pass('palette-conformance', `${el.role} uses ${hex} from the palette`))
-      } else {
-        out.push(
-          fail(
-            'palette-conformance',
-            `${el.role} declares ${hex}, which is not in this brain's palette ` +
-              `(${[...allowed].join(', ')})`,
-          ),
-        )
-      }
+      const behind = dominantColour(raster, el.box)
+      out.push({
+        role: el.role,
+        declaredColour: hex,
+        behindColour: behind,
+        ratio: Math.round(contrastRatio(hex, behind) * 100) / 100,
+      })
     }
   }
-  if (out.length === 0) out.push(pass('palette-conformance', 'no declared colours to check'))
   return out
 }
 
@@ -257,12 +350,22 @@ export function checkAssetIntegrity(
       out.push(pass('asset-kit-match', `${el.assetPath} belongs to ${bundle.brandKitId}`))
     }
 
-    if (
-      asset.naturalWidth &&
-      asset.naturalHeight &&
-      el.renderedWidth &&
-      el.renderedHeight
-    ) {
+    if (!asset.naturalWidth || !asset.naturalHeight) {
+      out.push(
+        unverifiable(
+          'logo-aspect',
+          `${el.assetPath} declares no width, height or viewBox, so its natural ` +
+            'proportions are unknown and a squash here cannot be detected',
+        ),
+      )
+    } else if (!el.renderedWidth || !el.renderedHeight) {
+      out.push(
+        unverifiable(
+          'logo-aspect',
+          `${el.assetPath} was placed without a recorded rendered size`,
+        ),
+      )
+    } else {
       const natural = asset.naturalWidth / asset.naturalHeight
       const rendered = el.renderedWidth / el.renderedHeight
       const drift = Math.abs(rendered / natural - 1)
@@ -364,7 +467,16 @@ export function runAllChecks(
   ]
 }
 
-export const failures = (findings: Finding[]): Finding[] => findings.filter((f) => !f.ok)
+export const failures = (findings: Finding[]): Finding[] =>
+  findings.filter((f) => f.outcome === 'fail')
+
+/**
+ * Checks that could not run. Never empty-by-accident: these are surfaced so a
+ * person can decide whether the gap matters, rather than reading a green tick
+ * that means "not looked at".
+ */
+export const unverified = (findings: Finding[]): Finding[] =>
+  findings.filter((f) => f.outcome === 'unverifiable')
 
 function overlaps(a: Box, b: Box): boolean {
   return (

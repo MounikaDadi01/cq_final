@@ -387,6 +387,55 @@ outline on the navy ground. `DESIGN.md` wins.
 The Emplifi logo contains `#37B6E9`, which is not in the palette. It is a
 placed asset, so it ships as-is; the colour is never promoted to a token.
 
+## Handling worse brand data
+
+Later brains will be more broken than this packet. Nothing below modifies a brand
+file or SKILL.md: precedence comes from SKILL.md's own resolution order, and the
+universal fallback is its own sentence — *"keep the invariant, take the allowed
+alternative, and say in `RESULT.json` what you could not do."*
+
+**Most curveballs cost nothing because we do not parse the brand.** A future
+`## Motion` section, colours in Pantone, a scale in `rem`, prose rules nobody
+anticipated — none of it touches our code, because `DESIGN.md` ships as a file and
+the agent interprets it. Our entire machine-readable surface is three narrow
+things: the kit id from the manifest, asset paths with their kit ids, and font
+filenames.
+
+### Three outcomes, not two
+
+`unverifiable` is a first-class result alongside pass and fail. A check that
+cannot run says so rather than implying success — the same failure as a detector
+that never fires, one level up.
+
+| Input | Was | Now |
+|---|---|---|
+| SVG with no width, height or viewBox | logo-aspect silently skipped | `unverifiable`, with the reason |
+| Font filename not matching `family_weight_style` | dropped from the index, no trace | `font-filename-unrecognised`; the file still hydrates |
+| Palette value like `Pantone 158C` | entry vanished | `palette-value-not-machine-readable`; colour checks report unverifiable |
+
+Palette conformance now only *fails* a colour when the palette parsed completely.
+A brand we cannot compare is not off-brand, and failing every check it has would
+be worse than saying we could not tell.
+
+### Degradation ladder
+
+| Curveball | Handling |
+|---|---|
+| Cache disagrees with `DESIGN.md` | Cache is never hydrated, so no competing value exists |
+| `DESIGN.md` contradicts itself | Prose governs and is more specific; ties break on document order so the same brain always resolves the same way, and the resolution is recorded |
+| Named font not shipped | Nearest family from that same brain, heaviest weight, recorded |
+| Asset path dangles | Omit. Never typeset, never borrow |
+| Asset tagged to another kit | Quarantine at ingest, filter at hydration, reject at ACK |
+| Two assets share a `kind` | Keep both. Never guess which is "the" logo |
+| Optional field absent | Never required; fall back within the brain, never invent |
+| Unknown section or unit | Passes through untouched |
+| Accent unreadable on its ground | Contrast ratio **computed and reported, never enforced** |
+| No usable palette at all | Blocked, with a reason |
+
+That last-but-one row is the general line: **compute anything with an exact
+answer, leave acceptability to the model.** Software that decides an ad is
+off-brand will reject work a person would ship.
+
 ## Canvas sizes
 
 Required: 1080x1080, 1200x628, 1080x1350, 728x90. Four sizes means four

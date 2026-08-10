@@ -76,6 +76,32 @@ export function rgbToHex(r: number, g: number, b: number): string {
   return `#${[r, g, b].map((v) => v.toString(16).padStart(2, '0')).join('').toUpperCase()}`
 }
 
+/** WCAG relative luminance. */
+export function relativeLuminance(hex: string): number {
+  const { r, g, b } = hexToRgb(hex)
+  const channel = (v: number) => {
+    const s = v / 255
+    return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4
+  }
+  return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b)
+}
+
+/**
+ * WCAG contrast ratio, 1 to 21.
+ *
+ * Computed and reported, never enforced. The ratio has an exact answer so
+ * software owns it; whether a given ratio is acceptable for a brand is a
+ * judgement, and software that decides an ad is off-brand will reject work a
+ * person would ship.
+ */
+export function contrastRatio(a: string, b: string): number {
+  const la = relativeLuminance(a)
+  const lb = relativeLuminance(b)
+  const light = Math.max(la, lb)
+  const dark = Math.min(la, lb)
+  return (light + 0.05) / (dark + 0.05)
+}
+
 /** Euclidean distance in RGB. Crude, and adequate for "is this that colour". */
 export function colourDistance(a: string, b: string): number {
   const p = hexToRgb(a)

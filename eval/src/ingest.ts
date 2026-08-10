@@ -1,7 +1,13 @@
 import { createHash } from 'node:crypto'
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { join, posix, relative, sep } from 'node:path'
-import { loadBrain, normaliseHex, resolveFamily, declaredFamilies } from './brain'
+import {
+  declaredFamilies,
+  loadBrain,
+  normaliseHex,
+  resolveFamily,
+  selfContradictions,
+} from './brain'
 
 /**
  * Plans the ingest of a brain directory: what to upload, what rows to write, and
@@ -305,6 +311,52 @@ export function planIngest(dir: string): IngestPlan {
       substituted: resolution.substituted,
     }
   })
+
+  // Input we could not turn into machine-readable values. None of these block:
+  // the files hydrate in full and the agent reads DESIGN.md regardless. They are
+  // recorded so nothing is dropped in silence and a person can decide whether
+  // the gap matters.
+  for (const file of brain.unparsedFonts) {
+    findings.push({
+      code: 'font-filename-unrecognised',
+      severity: 'review',
+      detail:
+        `fonts/${file} does not follow family_weight_style, so it is not indexed. ` +
+        'It still hydrates with the rest of the directory and the agent can use it.',
+    })
+  }
+
+  for (const [key, raw] of Object.entries(brain.unparsedPalette)) {
+    findings.push({
+      code: 'palette-value-not-machine-readable',
+      severity: 'review',
+      detail:
+        `palette.${key} is "${raw}", which software cannot compare. ` +
+        'Colour checks for it report unverifiable rather than passing; the agent reads DESIGN.md.',
+    })
+  }
+
+  for (const asset of brain.assets) {
+    if (asset.exists && (!asset.naturalWidth || !asset.naturalHeight)) {
+      findings.push({
+        code: 'svg-no-intrinsic-size',
+        severity: 'review',
+        detail:
+          `${asset.path} declares no width, height or viewBox, so its natural proportions ` +
+          'are unknown and a squashed placement cannot be detected automatically.',
+      })
+    }
+  }
+
+  for (const contradiction of selfContradictions(brain)) {
+    findings.push({
+      code: 'design-doc-self-conflict',
+      severity: 'review',
+      detail:
+        `DESIGN.md states ${contradiction.key} twice: ${contradiction.detail}. ` +
+        `Resolved to ${contradiction.value}, deterministically, so every run agrees.`,
+    })
+  }
 
   findings.push(...tokenConflicts(dir, brain))
 
