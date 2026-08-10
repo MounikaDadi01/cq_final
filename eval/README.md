@@ -1,12 +1,15 @@
 # Evaluation layer
 
-Ships before the thing it grades. 144 tests, no browser, no image model, no AWS.
+Ships before the thing it grades. 190 tests, no browser, no cloud, and no image
+model unless you ask for one.
 
 ```bash
 cd eval
 npm install
-npm test          # extracts the packet, then runs everything
-npx tsc --noEmit  # typecheck
+npm test           # extracts the packet, then runs everything. Spends nothing.
+npm run test:brand # the hardcoded acceptance suite + the plate pipeline
+npm run test:live  # ONE real gpt-image-2 call. Costs money. Opt-in only.
+npx tsc --noEmit   # typecheck
 ```
 
 ## What it covers
@@ -20,6 +23,24 @@ npx tsc --noEmit  # typecheck
 | `ingest.test.ts` | Brain ingest planning, including a brand that exists nowhere in the packet |
 | `silent-cases.test.ts` | Input software cannot read — every case that used to pass quietly |
 | `logo-ground.test.ts` | Choosing a logo for the ground it sits on, when a reverse mark is missing |
+| `brand-acceptance.test.ts` | **Hardcoded** expectations for the two brands in the packet |
+| `plate-pipeline.test.ts` | Plan → generate → reduce to exact target, with the image call faked |
+
+## Two suites, opposite jobs
+
+The main suite **derives** every expectation from the brain, so it would pass for a
+brand nobody has seen. That proves the *mechanism* is brand-agnostic. It cannot
+prove the *outcome* is right — generic code can resolve a value with complete
+confidence and be wrong, and every derived assertion still passes.
+
+`brand-acceptance.test.ts` is the complement, and it **hardcodes on purpose**:
+Kahua's h1 is 48px, its accent is `#F26B21`, its heading substitutes to Barlow 700,
+its reverse logo does not exist. Emplifi's secondary is `#6765FE` and not the
+cache's `#5B5BD6`. If the resolution logic drifts, a number changes here and the
+failure names the exact value.
+
+Hardcoding is safe in that file and nowhere else: the tenant-name scanner reads
+`app/`, `api/` and `src/`, never `tests/`. Product code stays brand-blind.
 
 ## Two rules it is built on
 

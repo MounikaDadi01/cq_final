@@ -16,8 +16,20 @@ export interface Raster {
 }
 
 export function readPng(path: string): Raster {
-  const png = PNG.sync.read(readFileSync(path))
+  return decodePng(readFileSync(path))
+}
+
+/** Decodes PNG bytes, which is what the images endpoint hands back. */
+export function decodePng(bytes: Buffer): Raster {
+  const png = PNG.sync.read(bytes)
   return { width: png.width, height: png.height, data: png.data }
+}
+
+/** PNG bytes, for writing a plate to disk or uploading it. */
+export function encodePng(raster: Raster): Buffer {
+  const png = new PNG({ width: raster.width, height: raster.height })
+  raster.data.copy(png.data)
+  return PNG.sync.write(png)
 }
 
 export interface SyntheticRect extends Box {
