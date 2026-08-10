@@ -174,7 +174,7 @@ run's recipe always matches what it actually did.
 
 | Event | What happens |
 |---|---|
-| Operator sends a chat message | New run, new file, comments block populated |
+| Operator sends a chat message | New run, new file, `messages` block populated |
 | Retry after a crash | New run, new file, `resume.already_durable[]` reflects what is verified now |
 | Resume after a kill | New run, new file; the agent picks up as if files were never deleted |
 | Deploy | New run, `kind: deploy`, different credentials and prompt |
@@ -198,8 +198,8 @@ edit:
   new_revision: 4
   copy_diff: {headline: {from: "...", to: "..."}}   # {} when copy is unchanged
   parent_artifacts: [{canvas: portrait, kind: plate, url: "...", sha256: "..."}]
-comments:
-  - {id: cm_01, canvas: portrait, region: {x: 78, y: 640, width: 604, height: 214}, body: "..."}
+messages:
+  - {id: msg_01, canvas: portrait, author: "operator@…", body: "..."}
 resume:
   already_durable: [{canvas: portrait, kind: plate, sha256: "...", url: "..."}]
 ```
@@ -1286,12 +1286,12 @@ disqualifier if unfinished.
 A message carries tenant, task, revision, and body. Coordinates are the only
 thing lost, and the agent can read the render to find what the operator means.
 
-What matters is that the comment hydrates: right tenant, right task, right
-revision, right coordinates, and a prompt that conveys what the human meant.
-Whether an edit is a text change or a full plate regeneration is the model's
-call — no classifier gets built for it.
+What matters is that the message hydrates: right tenant, right task, right
+revision, and a prompt that conveys what the human meant. Whether an edit is a
+text change or a full plate regeneration is the model's call — no classifier gets
+built for it.
 
-Done when a comment left in the front end round-trips: it reaches the agent
+Done when a message left in the front end round-trips: it reaches the agent
 attached to the correct revision of the correct task of the correct tenant, the
 agent acts on it, and the updated asset returns to the front end with no manual
 step in between.
@@ -1382,7 +1382,9 @@ evidence that nothing crossed.
 
 - What happens when the brand changes between revision three and revision six.
 - Stale, resolved, or orphaned pins when the asset regenerates and the thing
-  under the pin moved.
+  under the pin moved. The brief asks this regardless of which surface is built,
+  and we chose chat — so the honest answer is that pins do not exist here, plus
+  what we would do if they did.
 - The concurrency cap, and what happens to the fourth request.
 - The blast radius of the agent's credentials.
 - The Kahua 728x90 impossibility.
