@@ -644,6 +644,63 @@ demonstration, which is why they carry hard failures rather than warnings.
 Sequential. Each stage names what it uses, why that choice, and what proves it
 before the next begins.
 
+### Where each stage lands
+
+Bracketed numbers are the stage that builds that piece.
+
+```
+                          operator's browser
+                                  │  HTTPS
+                                  ▼
+    [3] CloudFront ──── VPC origin ────▶ [3] internal ALB
+                                                  │
+                                                  ▼
+                                    ┌──────────────────────────────┐
+                                    │  [3] EC2 · private subnets   │
+                                    │      Next.js                 │
+                                    │      React front end + API   │
+                                    │      [4] deployed by SSM     │
+                                    │      [5] brain ingest        │
+                                    │      [8] chat surface        │
+                                    └──────────────────────────────┘
+                                       │                    │
+                        ┌──────────────┘                    └───────────────┐
+                        ▼                                                   ▼
+        ┌────────────────────────────┐                     ┌────────────────────────────┐
+        │  [3] RDS Postgres          │                     │  [3] S3                    │
+        │      isolated subnets      │                     │      cq-brains   [5]       │
+        │      runs · revisions      │                     │      cq-work     [6]       │
+        │      messages · artifacts  │                     │      cq-tfstate  [2]       │
+        │      runs table = queue [7]│                     └────────────────────────────┘
+        └────────────────────────────┘                          ▲            ▲
+                                                                │            │
+                        │  [6] create box + write HYDRATION.md  │            │
+                        ▼                                       │            │
+    ╔═══════════════════════════════════════════════════╗       │            │
+    ║  [6] E2B sandbox — one per run, OUTSIDE the VPC   ║       │            │
+    ║      boots holding only an opaque run id          ║       │            │
+    ║                                                   ║       │            │
+    ║      Claude Agent SDK                             ║       │            │
+    ║      [0] skill · plate call · overlay · render    ║───────┘  write-    │
+    ║      [9] Playwright browser + recording           ║   through + verify │
+    ║                                                   ║                    │
+    ║      pulls the brain FRESH every run ─────────────╫────────────────────┘
+    ╚═══════════════════════════════════════════════════╝
+                        │
+                        └──▶ ACK each artifact · finish_run
+                             via CloudFront, per-run token  [6]
+
+    ✗ NEVER: backend reads the box · syncs an out-dir · runs the agent locally
+
+    [1]  evaluation layer + CI ......... grades every stage above
+    [2]  tfstate + OIDC bootstrap ...... prerequisite for [3] and [4]
+    [10] evidence ...................... leak · kill · interleave · third brand
+```
+
+Two things the picture is meant to make obvious. Every arrow leaving the sandbox
+is the agent's own action, and the sandbox sits outside the VPC on purpose —
+that separation is what keeps the agent from living where the backend lives.
+
 ### Everything we are using, and why
 
 | Layer | Choice | Why this one |
