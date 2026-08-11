@@ -1,0 +1,29 @@
+{
+  "id": "v2-kahua-daylight-handover",
+  "brand_kit_id": "bk-kahua-2026",
+  "campaign": "Project handover, on time",
+  "kind": "new",
+  "notes": "Verification run. Bright daylight ground on purpose, so the correct logo is `logo` (kahua-logo.svg) — the asset this kit actually ships. Kahua's dark-ground path needs logo_reverse, which the manifest names as kahua-logo-white.svg and does not ship; that path escalates rather than substituting, and is reported as a finding.",
+  "canvases": [
+    { "name": "square", "width": 1080, "height": 1080 },
+    { "name": "landscape", "width": 1200, "height": 628 }
+  ],
+  "copy": {
+    "eyebrow": "CASE STUDY",
+    "headline": "Handover packages closed in days, not months",
+    "subhead": "A regional builder standardized closeout on Kahua.",
+    "cta": "Read the case study",
+    "cta_href": "https://kahua.com/handover",
+    "legal": null
+  },
+  "plate_direction": "A newly completed concrete and glass structure photographed in flat bright overcast daylight, seen from below at a slight angle. The sky is a large expanse of very pale, almost white overcast cloud filling the upper two thirds of the frame, completely free of detail, birds, cables or aircraft. The building occupies only the lower left. Cool neutral tones, high key, soft even light with no harsh shadows and no sunset colour. Documentary architectural photography, no people, no vehicles, no signage, no banners.",
+  "inspirations": [],
+  "style": {
+    "ground": "light",
+    "copyArea": "upper",
+    "eyebrow": { "role": "eyebrow", "colour": "accent", "size": "14px", "weight": 600, "tracking": "0.12em", "uppercase": true },
+    "headline": { "role": "headline", "colour": "ink", "size": "48px", "weight": 700, "leading": "1.02" },
+    "subhead": { "role": "subhead", "colour": "ink", "size": "17px", "weight": 400, "leading": "1.45" },
+    "cta": { "fill": "accent", "label": "surface", "size": "15px", "weight": 600, "radius": "4px" }
+  }
+}

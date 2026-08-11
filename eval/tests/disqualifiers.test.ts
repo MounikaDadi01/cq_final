@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
@@ -211,27 +212,105 @@ describe('no work exists only on a box', () => {
   })
 })
 
+/**
+ * The repository as it stands.
+ *
+ * This block used to scan `app/`, `api/` and `src/` at the repo root — none of which
+ * exist here, so it read zero files and passed for the worst possible reason. The brief
+ * names that failure exactly: *"'no leaks found' from a detector that finds nothing
+ * looks exactly like success."* The scanners were always fine; the target list was the
+ * bug, and a floor on the file count is what stops it coming back.
+ *
+ * The trees are split because the disqualifier is about **where the agent runs relative
+ * to the backend**, and `sandbox/` is by definition the far side of that line. Code that
+ * runs *inside* a box spawning `save_work` is not the backend launching an agent — it is
+ * the agent saving its own work, which is the thing the brief mandates. So the in-box
+ * tree gets a different and stricter question asked of it, below.
+ */
 describe('the repository as it stands', () => {
   const root = resolve(import.meta.dirname, '..', '..')
-  const files = collectSourceFiles(resolve(root, 'app')).concat(
-    collectSourceFiles(resolve(root, 'api')),
-    collectSourceFiles(resolve(root, 'src')),
-  )
+  const tree = (...parts: string[]) =>
+    collectSourceFiles(resolve(root, ...parts)).map((f) => ({
+      ...f,
+      path: `${parts.join('/')}/${f.path}`,
+    }))
 
-  it('has no violations in application source', () => {
-    // Currently vacuous: the application tree does not exist yet. It is wired up
-    // now so that stage 5 cannot land without it, and the planted-violation
-    // tests above are what prove the scanners work in the meantime.
-    expect(scanNoLocalProcessSpawning(files)).toEqual([])
-    expect(scanNoSandboxFilesystemReads(files)).toEqual([])
-    expect(scanNoTenantNames(files, tenants)).toEqual([])
+  /**
+   * The four files a template actually copies into an image.
+   *
+   * Named explicitly rather than taken as "everything in `sandbox/`", because that
+   * directory holds two unrelated things: code that executes inside a box, and the local
+   * tooling that builds and pokes the images. `diag.ts` and `smoke.ts` create sandboxes,
+   * which is correct for a developer tool on a laptop and would be a serious problem in
+   * something baked into a box — so the two must not be scanned as one tree.
+   *
+   * Keep this in step with the `.copy(...)` calls in `template.generation.ts` and
+   * `template.deployment.ts`; the assertion below fails loudly if it drifts to nothing.
+   */
+  const IN_BOX_FILES = ['agent.generate.ts', 'agent.deploy.ts', 'save_work.mjs', 'transcript.ts']
+
+  const sandboxTree = tree('sandbox')
+  const inBox = sandboxTree.filter((f) =>
+    IN_BOX_FILES.some((name) => f.path === `sandbox/${name}`),
+  )
+  /** Everything that runs on our side of the wire: the app, the API, the tooling. */
+  const backend = [
+    ...tree('web', 'app'),
+    ...tree('web', 'lib'),
+    ...tree('eval', 'src'),
+    ...tree('eval', 'scripts'),
+    ...tree('scripts'),
+    ...sandboxTree.filter((f) => !inBox.includes(f)),
+  ]
+  const production = [...backend, ...inBox]
+
+  it('scanned a real tree, and says how much of one', () => {
+    // The floor is the guard. A refactor that moves or renames a directory turns this
+    // red instead of quietly turning the whole suite into a vacuous pass.
+    expect(backend.length).toBeGreaterThan(30)
+    expect(production.length).toBeGreaterThan(50)
+    // Every file a template copies must be found. If someone renames one, this fails
+    // rather than quietly scanning three files and calling the box clean.
+    expect(inBox.map((f) => f.path).sort()).toEqual(
+      IN_BOX_FILES.map((n) => `sandbox/${n}`).sort(),
+    )
   })
 
-  it('says plainly whether it scanned anything', () => {
-    if (files.length === 0) {
-      expect(files.length).toBe(0) // documented vacuous pass
-    } else {
-      expect(files.length).toBeGreaterThan(0)
-    }
+  it('never launches an agent beside the backend', () => {
+    expect(scanNoLocalProcessSpawning(backend)).toEqual([])
+  })
+
+  it('carries no agent runtime in the front-end package', () => {
+    const pkg = readFileSync(resolve(root, 'web', 'package.json'), 'utf8')
+    expect(scanNoAgentRuntimeDependency(pkg)).toEqual([])
+  })
+
+  it('never moves work out of a box from the outside', () => {
+    expect(scanNoSandboxFilesystemReads(production)).toEqual([])
+  })
+
+  it('names no tenant anywhere in production source', () => {
+    expect(scanNoTenantNames(production, tenants)).toEqual([])
+  })
+
+  /**
+   * The in-box tree, asked the question that actually matters for it.
+   *
+   * `save_work` is the only executable an agent may reach: it is how work becomes
+   * durable, and it is the one process whose spawning is the paradigm rather than a
+   * violation of it. Anything else shelling out from inside a box would be a way to
+   * move work around that nothing else in this system can see.
+   */
+  it('spawns nothing but save_work from inside a box', () => {
+    const offenders = scanNoLocalProcessSpawning(inBox).filter(
+      (v) => !/\bsave_work\b/.test(v.evidence) && !/from 'node:child_process'/.test(v.evidence),
+    )
+    expect(offenders).toEqual([])
+  })
+
+  /** A box that could create boxes would put the launcher's job inside the sandbox. */
+  it('creates no sandbox from inside a sandbox', () => {
+    const creating = inBox.filter((f) => /\bSandbox\s*\.\s*create\s*\(/.test(f.content))
+    expect(creating.map((f) => f.path)).toEqual([])
   })
 })

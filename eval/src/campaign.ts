@@ -52,6 +52,13 @@ export interface Campaign {
   ofCampaign?: string
   ofRevision?: number
   notes?: string
+  /**
+   * Layout intent a person read out of `DESIGN.md`: where copy sits, whether the
+   * CTA is filled or outlined, which weights carry which role. Pinned here so
+   * Gate 0 is deterministic. In the running system the agent reads that prose
+   * itself, which is why none of it lives in code.
+   */
+  style?: unknown
   sourcePath: string
 }
 
@@ -76,6 +83,7 @@ export function loadCampaign(path: string): Campaign {
     ofCampaign: raw.of_campaign,
     ofRevision: raw.of_revision,
     notes: raw.notes,
+    style: raw.style,
     sourcePath: path,
   }
 }

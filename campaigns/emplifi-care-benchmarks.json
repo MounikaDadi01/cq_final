@@ -1,0 +1,30 @@
+{
+  "id": "emplifi-care-benchmarks",
+  "brand_kit_id": "bk-emplifi-2026",
+  "campaign": "Care benchmarks 2026",
+  "kind": "new",
+  "notes": "Fresh campaign for UI testing. Navy ground so the reverse logo is correct; inspiration attached to exercise the reference-image path. Three canvases.",
+  "canvases": [
+    { "name": "square", "width": 1080, "height": 1080 },
+    { "name": "landscape", "width": 1200, "height": 628 },
+    { "name": "portrait", "width": 1080, "height": 1350 }
+  ],
+  "copy": {
+    "eyebrow": "BENCHMARK REPORT",
+    "headline": "What good social care actually costs",
+    "subhead": "Response times, staffing and resolution across 1,400 brands.",
+    "cta": "Get the benchmarks",
+    "cta_href": "https://emplifi.io/care-benchmarks",
+    "legal": null
+  },
+  "plate_direction": "A deep navy field filling the entire frame. In the lower left, three concentric arcs in periwinkle sweep outward from off-canvas, thinning as they go, with two small solid periwinkle discs resting where the arcs cross. The upper two thirds and the right side are flat unbroken navy with no gradient banding, no detail and no objects. Flat vector rendering, studio clean, no photography, no devices, no screens, no people, no charts.",
+  "inspirations": ["emplifi-predictions-square.png"],
+  "style": {
+    "ground": "dark",
+    "copyArea": "upper",
+    "eyebrow": { "role": "eyebrow", "colour": "surface", "size": "13px", "weight": 600, "tracking": "0.14em", "uppercase": true },
+    "headline": { "role": "headline", "colour": "surface", "size": "48px", "weight": 700, "leading": "1.08" },
+    "subhead": { "role": "subhead", "colour": "surface", "size": "16px", "weight": 400, "leading": "1.5" },
+    "cta": { "fill": "none", "label": "accent", "border": "accent", "size": "15px", "weight": 600, "radius": "999px" }
+  }
+}

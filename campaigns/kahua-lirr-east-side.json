@@ -1,0 +1,74 @@
+{
+  "id": "kahua-lirr-east-side",
+  "brand_kit_id": "bk-kahua-2026",
+  "campaign": "LIRR East Side Access",
+  "kind": "new",
+  "canvases": [
+    {
+      "name": "square",
+      "width": 1080,
+      "height": 1080
+    },
+    {
+      "name": "landscape",
+      "width": 1200,
+      "height": 628
+    },
+    {
+      "name": "portrait",
+      "width": 1080,
+      "height": 1350
+    },
+    {
+      "name": "leaderboard",
+      "width": 728,
+      "height": 90
+    }
+  ],
+  "copy": {
+    "eyebrow": "Case Study",
+    "headline": "$11B of tunnel work, one system of record",
+    "subhead": "The MTA standardized capital program delivery on Kahua.",
+    "cta": "Read the case study",
+    "cta_href": "https://kahua.example/lirr-case-study",
+    "legal": null
+  },
+  "plate_direction": "A deep rail tunnel under construction beneath a city terminal, photographed at dawn. Wet concrete, exposed steel ribs, portable work lighting raking along the bore. Cool blue-grey ground close to a deep navy. Jobsite-real documentary photography, not stock office imagery. The lower half falls into deep shadow and holds no detail, leaving quiet space for copy. No gradients, no abstract illustration, no lens flare.",
+  "inspirations": [],
+  "style": {
+    "ground": "dark",
+    "copyArea": "lower",
+    "logoPosition": "top-left",
+    "eyebrow": {
+      "role": "eyebrow",
+      "colour": "accent",
+      "size": "14px",
+      "weight": 600,
+      "tracking": "0.14em",
+      "uppercase": true
+    },
+    "headline": {
+      "role": "headline",
+      "colour": "surface",
+      "size": "48px",
+      "weight": 700,
+      "leading": 1.02,
+      "tracking": "-0.015em"
+    },
+    "subhead": {
+      "role": "subhead",
+      "colour": "surface",
+      "size": "17px",
+      "weight": 400,
+      "leading": 1.4
+    },
+    "cta": {
+      "size": "16px",
+      "weight": 600,
+      "fill": "accent",
+      "label": "surface",
+      "radius": "4px"
+    }
+  },
+  "notes": "Invented for local Gate 0 testing. Requests all four sizes on purpose: 728x90 is confirmed planted bug #1 and is skipped with a finding, so this campaign exercises that path rather than only a unit test."
+}

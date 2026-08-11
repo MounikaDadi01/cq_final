@@ -5,6 +5,7 @@ import {
   declaredFamilies,
   loadBrain,
   normaliseHex,
+  recoverMissingKind,
   resolveFamily,
   selfContradictions,
 } from './brain'
@@ -192,6 +193,21 @@ export function planIngest(dir: string): IngestPlan {
 
   const brain = loadBrain(dir)
 
+  // A palette nobody could read is not the same as a brand with no colours, and
+  // until now the second case was silent: a document titled "## Colours" produced an
+  // empty palette, no finding, and a render that fell back to black and white looking
+  // entirely deliberate.
+  if (Object.keys(brain.palette).length === 0 && Object.keys(brain.unparsedPalette).length === 0) {
+    findings.push({
+      code: 'palette-not-found',
+      severity: 'review',
+      detail:
+        'no palette could be read from DESIGN.md — check the section heading. Without one, ' +
+        'text colour falls back to black and white, which is off-brand and looks intentional',
+    })
+  }
+
+
   if (!brain.kitId) {
     return empty({
       code: 'no-kit-id',
@@ -228,6 +244,21 @@ export function planIngest(dir: string): IngestPlan {
 
   const keyFor = (manifestPath: string) => `${brain.kitId}/${toPosix(manifestPath)}`
 
+  // Two files could each stand in for a missing reverse logo. Measurement got as
+  // far as narrowing it and no further, so it is reported and left unresolved
+  // rather than decided by ordering.
+  const ambiguous = recoverMissingKind(brain)
+  if (ambiguous && 'ambiguous' in ambiguous) {
+    findings.push({
+      code: 'asset-reverse-ambiguous',
+      severity: 'review',
+      detail:
+        `"logo_reverse" has no file, and ${ambiguous.ambiguous.length} files could each be it ` +
+        `(${ambiguous.ambiguous.map((c) => c.path).join(', ')}) — left unresolved, because ` +
+        'choosing between them is a judgment about the brand and not a measurement',
+    })
+  }
+
   const assets: IngestAsset[] = brain.assets.map((asset) => {
     if (!asset.exists) {
       findings.push({
@@ -262,6 +293,31 @@ export function planIngest(dir: string): IngestPlan {
         kitId: asset.kitId,
         available: false,
         reason: `belongs to ${asset.kitId}`,
+      }
+    }
+
+    if (asset.resolvedFrom) {
+      /**
+       * The manifest named a file that is not in the kit, and another file was
+       * measured to be that same mark recoloured for a dark ground. Recorded as a
+       * review finding rather than passed over in silence: this is a correction to
+       * the customer's own data, so it has to be visible and checkable even though
+       * the evidence is strong.
+       */
+      findings.push({
+        code: 'asset-reverse-recovered',
+        severity: 'review',
+        detail:
+          `${asset.path} is listed as "${asset.kind}" but no file exists; ` +
+          `${asset.resolvedFrom.path} was used instead — ${asset.resolvedFrom.reason}`,
+      })
+      return {
+        kind: asset.kind,
+        manifestPath: asset.path,
+        // The key has to point at the file that exists, not the one declared.
+        storageKey: keyFor(asset.resolvedFrom.path),
+        kitId: asset.kitId,
+        available: true,
       }
     }
 

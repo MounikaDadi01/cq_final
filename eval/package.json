@@ -10,12 +10,18 @@
     "test": "vitest run",
     "watch": "vitest",
     "test:brand": "vitest run tests/brand-acceptance.test.ts tests/plate-pipeline.test.ts",
-    "test:live": "CQ_LIVE_IMAGE=1 vitest run tests/plate-pipeline.test.ts"
+    "test:live": "CQ_LIVE_IMAGE=1 vitest run tests/plate-pipeline.test.ts",
+    "verify": "CQ_VERIFY=1 vitest run tests/product-verification.test.ts"
   },
   "devDependencies": {
     "@types/node": "^22.20.1",
+    "@types/pg": "^8.21.0",
     "@types/pngjs": "^6.0.5",
+    "e2b": "^2.38.3",
+    "pg": "^8.23.0",
+    "playwright": "^1.62.1",
     "pngjs": "^7.0.0",
+    "tsx": "^4.23.12",
     "typescript": "^5.9.3",
     "vitest": "^2.1.8"
   }

@@ -37,8 +37,19 @@ describe('hex normalisation', () => {
     expect(normaliseHex('#0c3b5d')).toBe('#0C3B5D')
   })
 
-  it('returns null for anything that is not a hex colour', () => {
-    for (const value of ['rgb(1,2,3)', 'transparent', 'currentColor', '#12345']) {
+  it('reads rgb(), because a print vendor makes a brand write colours that way', () => {
+    // This assertion used to say rgb() returned null. It was changed deliberately: a
+    // real kit wrote its whole palette as rgb(), and refusing it made the palette
+    // unreadable for a formatting reason rather than a substantive one.
+    expect(normaliseHex('rgb(30, 41, 59)')).toBe('#1E293B')
+    expect(normaliseHex('rgb(1,2,3)')).toBe('#010203')
+    expect(normaliseHex('rgba(255, 255, 255, 0.5)')).toBe('#FFFFFF')
+  })
+
+  it('refuses a colour with no correct conversion', () => {
+    // Pantone and friends stay unreadable on purpose. There is no right answer, and
+    // guessing one puts a wrong colour on a customer's ad with nothing to say so.
+    for (const value of ['PANTONE 2925 C', 'Paper White', 'transparent', 'currentColor', '#12345', 'rgb(300,0,0)']) {
       expect(normaliseHex(value)).toBeNull()
     }
   })

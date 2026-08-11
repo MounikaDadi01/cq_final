@@ -203,10 +203,41 @@ describe('it refuses rather than degrading', () => {
 })
 
 describe('failures are classified before anything is retried', () => {
-  it('treats 429 and 5xx as transient', () => {
+  it('treats a plain 429 and 5xx as transient', () => {
     expect(classifyImageFailure({ status: 429 }).kind).toBe('retry')
     expect(classifyImageFailure({ status: 500 }).kind).toBe('retry')
     expect(classifyImageFailure({ status: 503 }).kind).toBe('retry')
+  })
+
+  it('does not retry an exhausted balance, even though it arrives as a 429', () => {
+    // The exact response the live call returned. A retry policy that only looks at
+    // the status code would loop until the run timed out, and the agent would
+    // never learn what was actually wrong.
+    const real = {
+      status: 429,
+      message:
+        'You have no credits remaining. Add credits to continue using the API at ' +
+        'https://platform.openai.com/settings/organization/billing/.',
+      type: 'insufficient_quota',
+      param: null,
+      code: 'credit_balance_exhausted',
+    }
+    const f = classifyImageFailure(real)
+    expect(f.kind).toBe('needs-human')
+    expect(f.kind).not.toBe('retry')
+    expect(f.hint).toMatch(/Retrying cannot fix this/)
+  })
+
+  it('stops on a rejected key rather than retrying or rewriting', () => {
+    const f = classifyImageFailure({ status: 401 })
+    expect(f.kind).toBe('needs-human')
+    expect(f.hint).toMatch(/model\.request/)
+  })
+
+  it('stops on a forbidden request, which usually means unverified', () => {
+    const f = classifyImageFailure({ status: 403 })
+    expect(f.kind).toBe('needs-human')
+    expect(f.hint).toMatch(/verification/)
   })
 
   it('never retries a user error, because the request has to change', () => {

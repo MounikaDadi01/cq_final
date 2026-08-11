@@ -1,7 +1,7 @@
 {
-  "id": "emplifi-shoppable-video",
+  "id": "emplifi-live-commerce",
   "brand_kit_id": "bk-emplifi-2026",
-  "campaign": "2026 Social Commerce Predictions",
+  "campaign": "Live Commerce Playbook",
   "kind": "new",
   "canvases": [
     {
@@ -21,17 +21,15 @@
     }
   ],
   "copy": {
-    "eyebrow": "2026 Predictions",
-    "headline": "Shoppable video becomes the default discovery surface",
-    "subhead": "TikTok Shop now hosts 500,000+ US sellers. Your feed is a storefront.",
-    "cta": "Get the predictions",
-    "cta_href": "https://emplifi.example/predictions-2026",
+    "eyebrow": "Playbook",
+    "headline": "Live video sells. Most brands still run it manually.",
+    "subhead": "Scheduling, moderation and checkout in one operating surface.",
+    "cta": "Get the playbook",
+    "cta_href": "https://emplifi.example/live-commerce",
     "legal": null
   },
-  "plate_direction": "A deep navy ground, almost flat, occupying the whole frame. In the lower half, a real smartphone held upright showing a live shopping feed - product tiles and a video player, genuine interface rather than invented UI. The phone is framed by large soft periwinkle geometric shapes: a circle behind it and a wide arc sweeping past, plus one thin light connecting line. High contrast, crisp product photography. The upper half is unbroken navy with generous negative space and no detail at all.",
-  "inspirations": [
-    "emplifi-predictions-square.png"
-  ],
+  "plate_direction": "A deep navy ground, near flat. In the lower half, a real live-video broadcast console shown on a monitor: a video preview beside a chat stream and product cards, genuine interface, not invented UI. Large periwinkle circles and one wide arc frame the screen, with a single thin light line crossing behind it. High contrast, generous whitespace, crisp product surfaces. The upper half is unbroken navy, entirely free of detail.",
+  "inspirations": [],
   "style": {
     "ground": "dark",
     "copyArea": "upper",

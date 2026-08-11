@@ -1,0 +1,30 @@
+{
+  "id": "kahua-capital-projects",
+  "brand_kit_id": "bk-kahua-2026",
+  "campaign": "Capital projects, one system of record",
+  "kind": "new",
+  "notes": "Fresh campaign for UI testing — different copy and a different plate brief from anything generated locally. Three canvases so the switcher has all of them.",
+  "canvases": [
+    { "name": "square", "width": 1080, "height": 1080 },
+    { "name": "landscape", "width": 1200, "height": 628 },
+    { "name": "portrait", "width": 1080, "height": 1350 }
+  ],
+  "copy": {
+    "eyebrow": "PLATFORM",
+    "headline": "Every capital project, one system of record",
+    "subhead": "Owners, builders and inspectors working from the same file.",
+    "cta": "See the platform",
+    "cta_href": "https://kahua.com/platform",
+    "legal": null
+  },
+  "plate_direction": "A wide steel and glass transit hall under construction, photographed straight down its length in cool overcast daylight. Exposed structural steel ribs recede toward a bright opening at the far end. The upper third is an unbroken pale expanse of diffused light with no structure, cables or detail in it at all. Cool grey-blue tones, documentary architectural photography, no people, no vehicles, no signage, no banners, no equipment logos.",
+  "inspirations": [],
+  "style": {
+    "ground": "light",
+    "copyArea": "upper",
+    "eyebrow": { "role": "eyebrow", "colour": "accent", "size": "14px", "weight": 600, "tracking": "0.12em", "uppercase": true },
+    "headline": { "role": "headline", "colour": "ink", "size": "48px", "weight": 700, "leading": "1.04" },
+    "subhead": { "role": "subhead", "colour": "ink", "size": "17px", "weight": 400, "leading": "1.45" },
+    "cta": { "fill": "accent", "label": "surface", "size": "15px", "weight": 600, "radius": "4px" }
+  }
+}

@@ -161,7 +161,7 @@ export interface SandboxLaunchPayload {
 }
 
 /**
- * "A Kahua box and an Emplifi box. Any box whose identity says which tenant or
+ * "A Kahua box and an Emplifi box. Any box whose identity says which tenant or // cq-allow-disqualifier-scan: quoting the brief
  * task it serves."
  *
  * Identity is the template, the name, the metadata and the environment. The

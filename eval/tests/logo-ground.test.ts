@@ -1,16 +1,19 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
 import {
   DARK_GROUND_LUMINANCE,
   DEFAULT_LOGO_PREFERENCE,
   chooseLogo,
   loadBrain,
+  recoverMissingKind,
+  reverseCandidates,
+  svgSkeleton,
 } from '../src/brain'
 import { assessLogoGround, type ArtifactBundle } from '../src/checks'
 import { luminanceAt, makePng, relativeLuminance } from '../src/png'
-import { brains } from './fixtures'
+import { PACKET, brains } from './fixtures'
 
 /**
  * The missing reverse logo has a real answer, and it comes from the brand's own
@@ -212,5 +215,163 @@ describe('against the real packet', () => {
     const choice = chooseLogo(withMissingReverse, DARK)
     expect(choice.kind).toBe('logo_mark')
     expect(choice.asset?.exists).toBe(true)
+  })
+})
+
+/**
+ * Reverse-variant recovery.
+ *
+ * One kit in the packet declares a reverse logo whose file is not in the kit. The
+ * file does exist — it is declared in *another* kit's manifest, tagged as
+ * belonging to this one, and ingest uploads bytes under the prefix of the kit that
+ * owns them. So the shape these cases exercise is the post-ingest one: the file
+ * has arrived in the kit's folder and the kit's own manifest has never heard of
+ * it. That is exactly why recovery scans files rather than manifest entries.
+ *
+ * `materialise` reproduces that arrangement from the packet, which is what a run
+ * downloading the kit from storage actually sees.
+ */
+describe('recovering a reverse logo that is filed under another name', () => {
+  /** A kit folder as it exists after ingest: its own files, plus assets it owns. */
+  function materialise(kitSlug: string, adopt: { from: string; file: string }[] = []): string {
+    const dir = mkdtempSync(join(tmpdir(), `materialised-${kitSlug}-`))
+    temporaries.push(dir)
+    const source = join(PACKET, 'design-brains', kitSlug)
+    cpSync(source, dir, { recursive: true })
+    for (const { from, file } of adopt) {
+      cpSync(join(PACKET, 'design-brains', from, 'brand', file), join(dir, 'brand', file))
+    }
+    return dir
+  }
+
+  /** The kit whose manifest names a reverse logo with no file behind it. */
+  function kitMissingReverse(): { slug: string; owned: { from: string; file: string }[] } | null {
+    for (const brain of brains()) {
+      const missing = brain.assets.find((a) => a.kind === 'logo_reverse' && !a.exists)
+      if (!missing) continue
+      // Assets this kit owns that are staged in someone else's folder.
+      const owned: { from: string; file: string }[] = []
+      for (const other of brains()) {
+        if (other.kitId === brain.kitId) continue
+        for (const asset of other.assets) {
+          if (asset.kitId === brain.kitId && asset.exists) {
+            owned.push({ from: other.slug, file: basename(asset.path) })
+          }
+        }
+      }
+      if (owned.length) return { slug: brain.slug, owned }
+    }
+    return null
+  }
+
+  it('the packet still contains the case this covers', () => {
+    expect(kitMissingReverse(), 'no kit is missing a reverse logo it owns elsewhere').not.toBeNull()
+  })
+
+  it('recovers the misfiled reverse logo once the kit holds its own assets', () => {
+    const target = kitMissingReverse()!
+    const brain = loadBrain(materialise(target.slug, target.owned))
+
+    const asset = brain.assets.find((a) => a.kind === 'logo_reverse')!
+    expect(asset.resolvedFrom, `${brain.kitId} did not recover a reverse logo`).toBeTruthy()
+    expect(asset.exists).toBe(true)
+    // The declaration is preserved; only what was used is added beside it.
+    expect(asset.path).not.toBe(asset.resolvedFrom!.path)
+    expect(existsSync(asset.absolutePath)).toBe(true)
+
+    const recovered = readFileSync(asset.absolutePath, 'utf8')
+    const primary = readFileSync(
+      brain.assets.find((a) => a.kind === 'logo' && a.exists)!.absolutePath,
+      'utf8',
+    )
+    // The defining property: the same drawing, different ink.
+    expect(svgSkeleton(recovered)).toEqual(svgSkeleton(primary))
+    expect(recovered).not.toBe(primary)
+  })
+
+  it('the recovered file is what gets placed on a dark ground', () => {
+    const target = kitMissingReverse()!
+    const brain = loadBrain(materialise(target.slug, target.owned))
+    const asset = brain.assets.find((a) => a.kind === 'logo_reverse')!
+
+    const choice = chooseLogo(brain, 0.02)
+    expect(choice.kind, `${brain.kitId} still has no dark-ground logo`).toBe('logo_reverse')
+    expect(choice.asset!.absolutePath).toBe(asset.absolutePath)
+  })
+
+  it('leaves a kit alone when nothing in it matches', () => {
+    // Recovery must not invent an answer. A kit missing a reverse logo with no
+    // recoloured twin present stays missing, and stays reported.
+    const target = kitMissingReverse()!
+    const brain = loadBrain(materialise(target.slug))
+    const asset = brain.assets.find((a) => a.kind === 'logo_reverse')!
+    expect(asset.resolvedFrom).toBeUndefined()
+    expect(asset.exists).toBe(false)
+    expect(chooseLogo(brain, 0.02).kind).not.toBe('logo_reverse')
+  })
+
+  it('does not mistake a co-brand lockup for a reverse variant', () => {
+    /**
+     * The control that killed the first version of this rule. Matching on geometry
+     * and label alone accepted this file: its wordmark path is byte-identical to
+     * the primary's and it carries the same label. Only the extra elements
+     * distinguish it — and those extra elements are a second party's name, which
+     * is precisely what must never be placed as if it were the customer's logo.
+     */
+    const dir = mkdtempSync(join(tmpdir(), 'lockup-control-'))
+    temporaries.push(dir)
+    mkdirSync(join(dir, 'brand'), { recursive: true })
+    writeFileSync(
+      join(dir, 'DESIGN.md'),
+      '# Control\n\n## Palette\n\n- primary: #1E293B\n- ink: #0F172A\n- surface: #FFFFFF\n',
+    )
+    writeFileSync(
+      join(dir, 'brand', 'asset_manifest.json'),
+      JSON.stringify({
+        brand_kit_id: 'bk-control',
+        assets: [
+          { kind: 'logo', path: 'brand/mark.svg', brand_kit_id: 'bk-control' },
+          { kind: 'logo_reverse', path: 'brand/mark-white.svg', brand_kit_id: 'bk-control' },
+          { kind: 'logo_lockup', path: 'brand/mark-with-partner.svg', brand_kit_id: 'bk-control' },
+        ],
+      }),
+    )
+    const wordmark = '<path d="M16 76 L48 16 L80 76 Z" fill="%FILL%"/>'
+    writeFileSync(
+      join(dir, 'brand', 'mark.svg'),
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 96" aria-label="CONTROL">${wordmark.replace('%FILL%', '#0F172A')}</svg>`,
+    )
+    // Same drawing, plus a second party. All-white, so a colour-only rule accepts it.
+    writeFileSync(
+      join(dir, 'brand', 'mark-with-partner.svg'),
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 96" aria-label="CONTROL">` +
+        `${wordmark.replace('%FILL%', '#FFFFFF')}` +
+        `<rect x="212" y="30" width="2" height="36" fill="#FFFFFF"/>` +
+        `<text x="226" y="60" font-size="18" fill="#FFFFFF">PARTNER</text></svg>`,
+    )
+
+    const brain = loadBrain(dir)
+    expect(
+      reverseCandidates(brain).map((c) => c.path),
+      'a lockup carrying a second party was offered as the reverse logo',
+    ).not.toContain('brand/mark-with-partner.svg')
+    expect(brain.assets.find((a) => a.kind === 'logo_reverse')!.resolvedFrom).toBeUndefined()
+  })
+
+  it('reports rather than guesses when two files could each be the reverse', () => {
+    const target = kitMissingReverse()!
+    const dir = materialise(target.slug, target.owned)
+    const brain = loadBrain(dir)
+    const recoveredPath = brain.assets.find((a) => a.kind === 'logo_reverse')!.resolvedFrom!.path
+
+    // A second, byte-identical copy under a different name. Both are equally good
+    // answers, so measurement has run out and a person has to choose.
+    cpSync(join(dir, recoveredPath), join(dir, 'brand', 'another-candidate.svg'))
+    const forked = loadBrain(dir)
+    expect(reverseCandidates(forked).length).toBe(2)
+
+    const result = recoverMissingKind(forked)
+    expect(result && 'ambiguous' in result, 'two candidates were silently narrowed to one').toBe(true)
+    expect(forked.assets.find((a) => a.kind === 'logo_reverse')!.resolvedFrom).toBeUndefined()
   })
 })

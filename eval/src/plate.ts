@@ -121,8 +121,15 @@ export async function generatePlate(
   }
 }
 
-/** What the caller should do about a failure, before it does anything. */
-export type FailureKind = 'retry' | 'change-the-request' | 'unknown'
+/**
+ * What the caller should do about a failure, before it does anything.
+ *
+ * `needs-human` exists because a real failure taught us it had to. An exhausted
+ * credit balance arrives as **HTTP 429**, which every sane retry policy treats as
+ * transient — and no amount of backoff refills an account. A run would have
+ * retried until it timed out while the agent learned nothing.
+ */
+export type FailureKind = 'retry' | 'change-the-request' | 'needs-human' | 'unknown'
 
 export interface ImageFailure {
   kind: FailureKind
@@ -146,6 +153,38 @@ export function classifyImageFailure(error: unknown): ImageFailure {
     type?: string
     code?: string
     moderation_details?: { moderation_stage?: string; categories?: string[] }
+  }
+
+  // Checked before the 429 rule, because this one arrives *as* a 429 and is the
+  // opposite of transient.
+  if (e?.type === 'insufficient_quota' || e?.code === 'credit_balance_exhausted') {
+    return {
+      kind: 'needs-human',
+      code: e.code,
+      hint:
+        'the account has no credits left. Retrying cannot fix this and neither can ' +
+        'changing the prompt — stop, and report that billing needs attention.',
+    }
+  }
+
+  if (e?.status === 401) {
+    return {
+      kind: 'needs-human',
+      code: e.code,
+      hint:
+        'the key was rejected. Either it is invalid or it lacks the model.request ' +
+        'scope. Stop; this is a key configuration problem, not a prompt problem.',
+    }
+  }
+
+  if (e?.status === 403) {
+    return {
+      kind: 'needs-human',
+      code: e.code,
+      hint:
+        'the request was forbidden — typically an organisation that has not completed ' +
+        'verification for this model. Stop and report it.',
+    }
   }
 
   if (e?.status === 429 || (typeof e?.status === 'number' && e.status >= 500)) {

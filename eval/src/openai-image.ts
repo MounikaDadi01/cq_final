@@ -1,3 +1,4 @@
+import { existsSync, readFileSync } from 'node:fs'
 import { decodePng } from './png'
 import type { ImageCallRequest, ImageCaller } from './plate'
 
@@ -24,24 +25,54 @@ export function createOpenAIImageCaller(options: OpenAIImageOptions): ImageCalle
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), timeoutMs)
 
+    // Reference imagery has to go through /images/edits — /images/generations
+    // takes no image input at all, which is why attaching an inspiration was
+    // impossible until this branch existed. The size envelope is identical on
+    // both endpoints, so the planner's arithmetic still holds.
+    const references = [...(req.parentPlate ? [req.parentPlate] : []), ...req.referenceImages]
+    const useEdits = references.length > 0
+
     try {
-      const response = await fetch('https://api.openai.com/v1/images/generations', {
-        method: 'POST',
-        signal: controller.signal,
-        headers: {
-          Authorization: `Bearer ${options.apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model,
-          prompt: req.prompt,
-          // The exact legal size the planner chose. Never `auto`: the whole
-          // compliance argument depends on knowing what came back.
-          size: `${req.width}x${req.height}`,
-          quality: req.quality,
-          n: 1,
-        }),
-      })
+      let response: Response
+      if (useEdits) {
+        const form = new FormData()
+        form.append('model', model)
+        form.append('prompt', req.prompt)
+        form.append('size', `${req.width}x${req.height}`)
+        form.append('quality', req.quality)
+        form.append('n', '1')
+        // Repeated `image[]`, in order. The first entry is the one a mask would
+        // apply to, so a parent plate leads when revising.
+        references.forEach((bytes, i) => {
+          const copy = new Uint8Array(bytes.byteLength)
+          copy.set(bytes)
+          form.append('image[]', new Blob([copy], { type: 'image/png' }), `reference-${i}.png`)
+        })
+        response = await fetch('https://api.openai.com/v1/images/edits', {
+          method: 'POST',
+          signal: controller.signal,
+          headers: { Authorization: `Bearer ${options.apiKey}` },
+          body: form,
+        })
+      } else {
+        response = await fetch('https://api.openai.com/v1/images/generations', {
+          method: 'POST',
+          signal: controller.signal,
+          headers: {
+            Authorization: `Bearer ${options.apiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model,
+            prompt: req.prompt,
+            // The exact legal size the planner chose. Never `auto`: the whole
+            // compliance argument depends on knowing what came back.
+            size: `${req.width}x${req.height}`,
+            quality: req.quality,
+            n: 1,
+          }),
+        })
+      }
 
       const text = await response.text()
 
@@ -73,7 +104,6 @@ export function createOpenAIImageCaller(options: OpenAIImageOptions): ImageCalle
 
 /** Reads `.env` without a dependency, so a preflight needs no install step. */
 export function readEnvFile(path: string): Record<string, string> {
-  const { readFileSync, existsSync } = require('node:fs') as typeof import('node:fs')
   if (!existsSync(path)) return {}
   return Object.fromEntries(
     readFileSync(path, 'utf8')

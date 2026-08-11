@@ -1,0 +1,69 @@
+{
+  "id": "kahua-federal-portfolio",
+  "brand_kit_id": "bk-kahua-2026",
+  "campaign": "Federal Portfolio ABM",
+  "kind": "new",
+  "canvases": [
+    {
+      "name": "square",
+      "width": 1080,
+      "height": 1080
+    },
+    {
+      "name": "landscape",
+      "width": 1200,
+      "height": 628
+    },
+    {
+      "name": "portrait",
+      "width": 1080,
+      "height": 1350
+    }
+  ],
+  "copy": {
+    "eyebrow": "Case Study",
+    "headline": "$50B+ in federal assets managed on Kahua",
+    "subhead": "GSA standardized on Kahua for its national portfolio.",
+    "cta": "See the federal brief",
+    "cta_href": "https://kahua.example/federal-brief",
+    "legal": null
+  },
+  "plate_direction": "A federal courthouse under renovation, seen from ground level in flat overcast light. Scaffolding, protective sheeting, a tower crane at the edge of frame. Muted blue-grey and concrete tones. Documentary, plain, unglamorous - the way a site actually looks on a working Tuesday. The lower third is plain sheeting and shadow with no detail, held clear for copy. No gradients, no dramatic sunset, no abstract shapes.",
+  "inspirations": [],
+  "style": {
+    "ground": "dark",
+    "copyArea": "lower",
+    "logoPosition": "top-left",
+    "eyebrow": {
+      "role": "eyebrow",
+      "colour": "accent",
+      "size": "14px",
+      "weight": 600,
+      "tracking": "0.14em",
+      "uppercase": true
+    },
+    "headline": {
+      "role": "headline",
+      "colour": "surface",
+      "size": "48px",
+      "weight": 700,
+      "leading": 1.02,
+      "tracking": "-0.015em"
+    },
+    "subhead": {
+      "role": "subhead",
+      "colour": "surface",
+      "size": "17px",
+      "weight": 400,
+      "leading": 1.4
+    },
+    "cta": {
+      "size": "16px",
+      "weight": 600,
+      "fill": "accent",
+      "label": "surface",
+      "radius": "4px"
+    }
+  },
+  "notes": "Invented for local Gate 0 testing."
+}

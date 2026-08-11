@@ -1,0 +1,29 @@
+{
+  "id": "v2-emplifi-commerce-signals",
+  "brand_kit_id": "bk-emplifi-2026",
+  "campaign": "Commerce signals report",
+  "kind": "new",
+  "notes": "Verification run. Dark/navy ground, so the correct logo is logo_reverse (emplifi-logo-white.svg), which this kit ships. Inspiration attached by filename to exercise the reference-image path.",
+  "canvases": [
+    { "name": "square", "width": 1080, "height": 1080 },
+    { "name": "landscape", "width": 1200, "height": 628 }
+  ],
+  "copy": {
+    "eyebrow": "BENCHMARK REPORT",
+    "headline": "Every commerce signal, on one timeline",
+    "subhead": "How the top quartile of brands connect social, care and conversion.",
+    "cta": "Read the report",
+    "cta_href": "https://emplifi.io/commerce-signals",
+    "legal": null
+  },
+  "plate_direction": "A deep navy field occupying the whole frame. In the lower right, large overlapping soft-edged circles in periwinkle and a lighter blue, arranged as a cluster that reads as an abstract diagram, with one thin white arc sweeping through them. The upper half and upper left are an unbroken flat navy expanse with no detail whatsoever, no gradient banding and no objects. Studio-clean, flat vector-like rendering, no photography, no devices, no screens, no hands, no people.",
+  "inspirations": ["emplifi-shoppable-video.png"],
+  "style": {
+    "ground": "dark",
+    "copyArea": "upper",
+    "eyebrow": { "role": "eyebrow", "colour": "secondary", "size": "13px", "weight": 600, "tracking": "0.14em", "uppercase": true },
+    "headline": { "role": "headline", "colour": "surface", "size": "48px", "weight": 700, "leading": "1.08" },
+    "subhead": { "role": "subhead", "colour": "surface", "size": "16px", "weight": 400, "leading": "1.5" },
+    "cta": { "fill": "none", "label": "accent", "border": "accent", "size": "15px", "weight": 600, "radius": "999px" }
+  }
+}
