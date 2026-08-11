@@ -233,6 +233,7 @@ create two sources of truth about whether a run is pending.
 ```bash
 npm test --prefix eval                 # 297 tests, offline
 npm run test:isolation --prefix eval   # 62 tests against the live database
+npm run e2e --prefix web               # 25 tests through the real interface
 ```
 
 **297 offline**, across brand resolution, the plate pipeline, logo grounding, canvas
@@ -242,6 +243,14 @@ capability, hydration shape, the deploy verification rules, and the disqualifier
 isolation, storage isolation, token expiry. This is the suite that proves one customer
 cannot reach another's brand, and it includes the packet's mis-tagged asset as a planted
 leak the wrong tenant must not see.
+
+**25 through the product itself**, driving the real interface with Playwright: sign-in and
+cross-customer isolation from the browser, the review screen's regions and the compose
+panel, the deploy screen showing evidence rather than intent, and the API refusing what it
+should — a forged session cookie, a revision id that is really a flag, an upload claiming
+another customer, a path masquerading as a filename. Serial and single-worker, because the
+suite reads shared state and a parallel race would surface as a product bug rather than a
+scheduling one.
 
 Both suites are built so that **a green run means they looked.** The isolation suites skip
 themselves loudly, and say so in words, when they cannot connect — a suite that goes green

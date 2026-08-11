@@ -45,8 +45,9 @@ to?" without spending a build.
 ## Verifying it
 
 ```bash
-npm test --prefix eval             # 297 tests, no network, no database
+npm test --prefix eval                 # 297 tests, no network, no database
 npm run test:isolation --prefix eval   # 62 tests against the live database
+npm run e2e --prefix web               # 25 tests through the real interface
 ```
 
 **Run the second one.** The first suite deliberately touches nothing external, which
@@ -60,6 +61,12 @@ It needs `SUPABASE_DB_URL` in `.env` and the project's CA bundle at
 The certificate is not committed because it is not ours to redistribute. Without either,
 the suites **skip themselves loudly** rather than passing — a green run that never
 connected is the failure this layer exists to prevent.
+
+The third drives the product itself with Playwright against the dev server on port 3100 —
+sign-in and cross-customer isolation from the browser, the review screen's regions, the
+deploy screen, and the API refusing what it should: a forged session cookie, a revision id
+that is really a flag, an upload claiming another customer, a path masquerading as a
+filename. Start `npm run dev --prefix web` first.
 
 Other suites, opt-in because they spend money or write real rows:
 
