@@ -28,13 +28,27 @@ cleanable. A row with no bytes is a lie the rest of the system believes. Nothing
 ever moves work out of a box: no backend collecting files, no out-directory sync, no
 reading the sandbox filesystem after a run.
 
-**Resume.** Always a fresh box, never a revived one. A resumed run rehydrates from
-storage and the run table, and carries `resume.already_durable[]` — every artifact the
-previous attempt verified, which must not be regenerated. That is what makes resume
-cheap: a successful image call is billed once, no matter how many boxes it takes to
-finish the job. Sandbox pause/resume is not used at all, because the behaviour the brief
-tests is *kill the box, spin a new one, rehydrate* — and reviving a paused box would
-demonstrate nothing.
+**Resume — and this one is half built, so read it carefully.**
+
+What *is* true: a run is always a fresh box, never a revived one. Sandbox pause/resume is
+not used at all, deliberately, because the behaviour the brief tests is *kill the box,
+spin a new one, rehydrate* and reviving a paused box would demonstrate nothing. Saving is
+append-only: `save_work` asks the database what this revision already has and skips it, so
+re-running a partly-finished revision reports `N already recorded` and re-uploads nothing.
+State lives in Postgres and object storage, so killing a box loses no work that was saved.
+
+What is **not** built: there is no `resume.already_durable[]` in the hydration file. The
+design called for one — the list of artifacts a previous attempt verified, handed to the
+agent so it cannot regenerate them — and it was never implemented. The consequence is
+specific and costs money: a resumed run re-enters a box that does not know which plates
+already exist, so a successful `gpt-image-2` call that was already billed can be billed
+again. `save_work` then declines to overwrite the artifact, which keeps the *record*
+correct while the spend has already happened.
+
+So the honest claim is: **work survives a killed box; billing does not.** Closing it is
+small — the launcher already queries this revision's artifacts, so it is a matter of
+passing that list into hydration and having the agent treat it as read-only. I did not do
+it, and I would do it before claiming resume works.
 
 **Isolation.** Row-level security, denying by default. The backend mints a short-lived
 JWT per run carrying `{ role, run_id, revision_id, brand_kit_id }`, and policies turn
@@ -174,6 +188,13 @@ all.
 - **Per-ad detail-page verification on deploy.** The list confirms an ad exists by name;
   the ad's own detail page is not read back per canvas. This is the weakest link in the
   system and is described below.
+- **`resume.already_durable[]`** — described above. Work survives a killed box; a
+  re-billed image call does not.
+- **728x90.** The canvas is skipped and reported as a finding carrying the arithmetic,
+  rather than failing at run time. Two independent constraint failures, and no available
+  model emits anything that wide — confirmed as a deliberately planted bug and cleared to
+  skip. Three canvases ship; the campaign that asks for all four exercises exactly this
+  path, which is why it exists.
 - **Brand-kit versioning and rollback** — explicitly out of scope per the brief.
 
 ## What I would do next, in order

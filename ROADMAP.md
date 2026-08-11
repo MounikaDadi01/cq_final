@@ -1249,7 +1249,7 @@ Bracketed numbers are the stage that builds that piece.
 
 ---
 
-### Stage 0 — Gate 0: ads worth defending *(next)*
+### Stage 0 — Gate 0: ads worth defending *(done)*
 
 Resolve the brand data, build the plate call, build the overlay, render to PNG,
 look at it. Twenty ads across both brands.
@@ -1266,7 +1266,7 @@ Playwright is the same renderer the sandbox will use, so nothing is thrown away.
 
 ---
 
-### Stage 1 — Automate the checks
+### Stage 1 — Automate the checks *(done)*
 
 Actions on pull request: typecheck, lint, the suite, the tenant-name grep, and the
 RLS-enabled-everywhere assertion.
@@ -1277,7 +1277,7 @@ runs.
 
 ---
 
-### Stage 2 — Supabase: schema, buckets, policies
+### Stage 2 — Supabase: schema, buckets, policies *(done)*
 
 Numbered migrations for the ten tables, two private buckets, and RLS on
 everything with deny-by-default.
@@ -1289,7 +1289,7 @@ the same unreachability problem a local API does.
 
 ---
 
-### Stage 3 — The application, locally
+### Stage 3 — The application, locally *(done)*
 
 The Next.js shell, the operator views, and the intake path. Nothing to deploy.
 
@@ -1334,7 +1334,7 @@ merged is not.
 
 ---
 
-### Stage 4 — Brain ingest
+### Stage 4 — Brain ingest *(done)*
 
 Upload a brain, store every object at `brains/<kit-id>/<path>`, write the kit,
 asset and font rows, show the findings report before committing.
@@ -1345,7 +1345,7 @@ verifiable before either existed.
 
 ---
 
-### Stage 5 — One real sandbox run, end to end
+### Stage 5 — One real sandbox run, end to end *(done)*
 
 Hydrate a box, pull the brain fresh, generate, save, kill it.
 
@@ -1356,7 +1356,7 @@ rows and objects the run can touch — no endpoint of ours in the path.
 
 ---
 
-### Stage 6 — Sandbox evaluation layer
+### Stage 6 — Sandbox evaluation layer *(done)*
 
 Tests for what only a live box can prove: hydration fidelity digest for digest,
 cross-revision writes **denied**, cross-kit asset reads returning zero rows,
@@ -1369,7 +1369,7 @@ JWT makes the isolation tests plain SQL — far harder to fake than a green tick
 
 ---
 
-### Stage 7 — The engine
+### Stage 7 — The engine *(done)*
 
 Concurrency to the cap, resume, retry, partial saves, soft delete, re-run.
 
@@ -1381,19 +1381,26 @@ has no lifecycle rules.
 
 ---
 
-### Stage 8 — Chat surface
+### Stage 8 — Feedback surface *(done — built as pins, not chat)*
 
 A message against a named revision reaches the agent, and the updated asset
 returns.
 
 **Stack** Next.js · Postgres · Realtime.
-**Why** Chat rather than pins because the graded part is whether the message
-hydrates to the right tenant, task and revision — identical either way — and the
-hours saved go to deploy.
+**Why** The plan said chat rather than pins, on the grounds that the graded part
+is whether the message hydrates to the right tenant, task and revision — which is
+identical either way — and that the hours saved should go to deploy.
+
+**What was actually built: pinned regions.** Deploy finished with time in hand, and
+the brief's "pins are areas, not points" is a stronger demonstration of the same
+hydration path: a region has coordinates to carry, so getting it to the agent
+attached to the right revision proves more than a bare message does. The chat
+rationale is left here rather than rewritten, because the reasoning was sound at
+the time and the record of changing course is worth more than a tidy plan.
 
 ---
 
-### Stage 9 — Deploy *(automatic disqualifier if unfinished)*
+### Stage 9 — Deploy *(done — a deploy fired from the front end published three ads and was confirmed in the tool's own list, on video)*
 
 A deploy is its own run, so it spins **its own fresh box** — the generation box
 died when that run ended. This one hydrates the finished artifacts from
@@ -1409,7 +1416,7 @@ the graded test is resilience to a UI change.
 
 ---
 
-### Stage 10 — Evidence
+### Stage 10 — Evidence *(partly done — see below)*
 
 Plant a leak and catch it, then relax the RLS policy and watch the same check fail.
 Kill a box and resume. Run the interleaved concurrent case. Take a third brain
@@ -1418,6 +1425,19 @@ through untouched.
 **Stack** The suites from stages 1 and 6.
 **Why** Nothing new to build — both harnesses already exist, which is the point of
 having built them first.
+
+**Where it actually stands**, item by item, because "evidence" is the one stage
+that must not be summarised optimistically:
+
+- *Plant a leak and catch it* — **done.** The packet's mis-tagged asset is a real
+  planted leak, and `rls.test.ts` asserts the wrong tenant cannot see it. The
+  disqualifier scanners are each fed a planted violation too.
+- *Run the interleaved concurrent case* — **done.** Three runs under `results/`.
+- *Kill a box and resume* — **not done.** Work survives, because saving is
+  append-only and state lives in Postgres. But there is no `already_durable` list
+  in hydration, so a resumed run can be billed twice for an image it already made.
+  Written up in `DECISIONS.md`.
+- *Take a third brain through untouched* — **in progress**, through the UI.
 
 ## The engine
 

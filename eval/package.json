@@ -9,6 +9,7 @@
     "pretest": "npm run unpack",
     "test": "vitest run",
     "watch": "vitest",
+    "test:isolation": "node scripts/with-db-env.mjs vitest run tests/rls.test.ts tests/tenant-isolation.test.ts tests/storage-rls.test.ts",
     "test:brand": "vitest run tests/brand-acceptance.test.ts tests/plate-pipeline.test.ts",
     "test:live": "CQ_LIVE_IMAGE=1 vitest run tests/plate-pipeline.test.ts",
     "verify": "CQ_VERIFY=1 vitest run tests/product-verification.test.ts"
