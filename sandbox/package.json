@@ -1,0 +1,26 @@
+{
+  "name": "@cq/sandbox",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "E2B sandbox templates and the in-box save_work executable.",
+  "scripts": {
+    "build:generation": "tsx build.ts generation",
+    "build:deployment": "tsx build.ts deployment",
+    "build": "tsx build.ts all",
+    "dockerfile": "tsx build.ts --print"
+  },
+  "dependencies": {
+    "e2b": "^2.38.3"
+  },
+  "devDependencies": {
+    "@openai/agents": "^0.14.3",
+    "@types/node": "^22.20.1",
+    "@types/pngjs": "^6.0.5",
+    "playwright": "^1.62.1",
+    "pngjs": "^7.0.0",
+    "tsx": "^4.23.12",
+    "typescript": "^5.9.3",
+    "zod": "^4.4.3"
+  }
+}

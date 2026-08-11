@@ -1,0 +1,31 @@
+{
+  "digests": {
+    "generation": "70a0222f8d7d8cf6207a729f74bef4f3171fc74b44f90f3dfdb73f24e44b2127",
+    "deployment": "afbc3abe225478ce69cee943a04b647208f0c6283009fc7164f73db952bbacaf"
+  },
+  "built": [
+    "generation",
+    "deployment"
+  ],
+  "at": "2026-08-11T21:45:15.465Z",
+  "files": {
+    "agent.generate.ts": "22a35a8699bab597",
+    "template.generation.ts": "15d80853c0c66374",
+    "save_work.mjs": "3f82717bbea91e2d",
+    "skill:design-generation": "fc26af5663228ab8",
+    "toolkit:capability.ts": "330ce0a53d370b61",
+    "toolkit:png.ts": "06ffb27a7815451d",
+    "toolkit:resample.ts": "17f27804d2835e25",
+    "toolkit:plate.ts": "fc11ba3e48288631",
+    "toolkit:openai-image.ts": "390e07547d48e653",
+    "toolkit:brain.ts": "6b381d7a1dc5a049",
+    "toolkit:campaign.ts": "d360dce6de149af5",
+    "toolkit:logo-placement.ts": "46df38dd7d54e0e4",
+    "toolkit:overlay.ts": "87974d384d7e936b",
+    "toolkit:render.ts": "8c8212f196247f53",
+    "toolkit:checks.ts": "3ab6660f536f8dcc",
+    "agent.deploy.ts": "54bd94e0c0c3d38d",
+    "template.deployment.ts": "bb51131215de3d26",
+    "skill:deploy-campaign": "bd858f8260db8784"
+  }
+}
