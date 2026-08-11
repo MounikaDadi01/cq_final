@@ -70,6 +70,27 @@ reviving a paused box would demonstrate nothing. State lives in Postgres and obj
 storage, so a killed box loses no saved work, and an append-only save means a retry
 resumes rather than duplicates.
 
+**Surviving an unannounced kill.** A box is deleted the moment its run ends, and a kill
+gives it no chance to write anything on the way out — so a transcript assembled in memory
+and saved at the end is precisely the transcript you do not have when you need it, because
+the runs worth reading are the ones that died. The run's account of itself is therefore
+made durable *while it is still running*, flushed on a thirty-second timer, and what has
+been flushed is already safe.
+
+Two details in that carry the reasoning. It writes **numbered segments** rather than one
+growing file, because `save_work` is append-only: a single `transcript.jsonl` re-saved
+every thirty seconds would persist its first thirty seconds and silently discard
+everything after. And the flush is scoped with `--only transcript`, because a bare save
+would sweep up whatever else is new in the tree — a PNG caught half-written would be
+stored and filed as a finished `render`, and append-only means that row could never be
+corrected. **The debugging tool must not be able to publish a corrupt ad.**
+
+Secrets are scrubbed by key name rather than by content, and signed URLs keep their path
+and lose their query, because knowing *which* artifact was fetched is most of the value of
+the line. Nothing in it can throw: a transcript that breaks the run it is describing is
+worse than no transcript, and this is the one component whose failure must not cost a
+render that has already been paid for.
+
 ---
 
 ## The four routed questions
@@ -177,6 +198,10 @@ through the UI with several boxes at once.
 
 **A feedback surface.** Pinned regions round-tripping to the agent, attached to the right
 revision of the right task of the right tenant.
+
+**Run transcripts that survive the box.** Both agents write their own account as they go
+and flush it to durable storage every thirty seconds, in segments, so a run killed
+mid-form leaves evidence rather than nothing. Described above.
 
 **Deployment.** A browser inside the box driving Adstream: sign in, three-step create
 flow, upload, publish, confirm in the tool's own list, session recorded on video. One ad
