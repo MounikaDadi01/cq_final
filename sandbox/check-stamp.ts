@@ -55,6 +55,7 @@ export const BAKED: Record<TemplateName, { label: string; path: string }[]> = {
   ],
   deployment: [
     sandboxFile('agent.deploy.ts'),
+    sandboxFile('transcript.ts'),
     sandboxFile('template.deployment.ts'),
     sandboxFile('save_work.mjs'),
     skillFile('deploy-campaign'),

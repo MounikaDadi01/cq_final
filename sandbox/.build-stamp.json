@@ -1,13 +1,12 @@
 {
   "digests": {
     "generation": "2a32db226db9e363d8acaade8b0569c609482adad8898520818c73e1c8c238bb",
-    "deployment": "aa3b522c695d1acc670d63ed07be796139bd76bd9f36f83f979a3b8ed3e82edb"
+    "deployment": "9e8e508717b9078208a16d4f5a1ace8882ec2c6312c24e178532809c827d5594"
   },
   "built": [
-    "generation",
     "deployment"
   ],
-  "at": "2026-08-11T22:27:53.473Z",
+  "at": "2026-08-11T22:48:16.631Z",
   "files": {
     "agent.generate.ts": "22a35a8699bab597",
     "template.generation.ts": "15d80853c0c66374",
@@ -24,8 +23,9 @@
     "toolkit:overlay.ts": "87974d384d7e936b",
     "toolkit:render.ts": "8c8212f196247f53",
     "toolkit:checks.ts": "3ab6660f536f8dcc",
-    "agent.deploy.ts": "54bd94e0c0c3d38d",
-    "template.deployment.ts": "bb51131215de3d26",
+    "agent.deploy.ts": "5e0c16023f8c2daa",
+    "transcript.ts": "0efd1e5ab4b679b8",
+    "template.deployment.ts": "ac9592c0ff00e55a",
     "skill:deploy-campaign": "bd858f8260db8784"
   }
 }

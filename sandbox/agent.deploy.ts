@@ -25,6 +25,7 @@ import { join } from 'node:path'
 import { Agent, run, tool } from '@openai/agents'
 import { chromium, type BrowserContext, type Locator, type Page } from 'playwright'
 import { z } from 'zod'
+import { Transcript } from './transcript'
 
 const HOME = process.env.HOME ?? '/home/user'
 const WORK = process.env.CQ_WORK_DIR ?? join(HOME, 'work')
@@ -73,9 +74,25 @@ mkdirSync(RECORDING_DIR, { recursive: true })
 const findings: { code: string; severity: string; detail: string }[] = []
 const steps: string[] = []
 
+/**
+ * The run's account of itself, made durable every thirty seconds.
+ *
+ * `steps` already existed but only reached storage in `RESULT.json` at the very end, so
+ * the runs most worth reading — the ones killed mid-form — left nothing behind. This
+ * writes the same events as they happen.
+ *
+ * Constructed but not started until the browser is up: a failure before then is already
+ * reported by the launcher, and a timer with nothing to say is noise.
+ */
+const transcript = new Transcript({
+  workDir: WORK,
+  runId: hydration.run_id,
+})
+
 function note(step: string) {
   steps.push(`${new Date().toISOString().slice(11, 19)} ${step}`)
   console.log(`[deploy] ${step}`)
+  transcript.line('step', { step })
 }
 
 /**
@@ -137,6 +154,9 @@ context = await browser.newContext({
 })
 page = await context.newPage()
 note('recording started')
+// Flushing starts here: from this point the box is driving somebody else's interface,
+// which is the only part of a deploy anybody needs a transcript of.
+transcript.start()
 
 const currentPage = () => page as Page
 
@@ -897,6 +917,10 @@ try {
       2,
     ) + '\n',
   )
+
+  // Last segment out before the final save. Stops the timer too, so nothing races the
+  // `--final` call that marks the revision.
+  transcript.stop()
 
   try {
     execFileSync('save_work', ['--final'], { encoding: 'utf8', timeout: 180_000, stdio: 'inherit' })

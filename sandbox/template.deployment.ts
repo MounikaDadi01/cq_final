@@ -42,6 +42,9 @@ export const deploymentTemplate = Template()
   .runCmd('chmod +x /usr/local/bin/save_work')
 
   .copy('agent.deploy.ts', `${HOME}/agent.deploy.ts`)
+  // Imported by the agent, so it has to be in the image beside it — a missing module
+  // here is not a degraded transcript, it is a box that cannot start.
+  .copy('transcript.ts', `${HOME}/transcript.ts`)
 
   // `npm init -y` writes no `type`, so tsx compiles to CJS and every top-level
   // await in the agent fails to transform. Declared explicitly rather than left to
