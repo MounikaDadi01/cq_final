@@ -1,0 +1,21 @@
+{
+  "brand_kit_id": "bk-harborline-2026",
+  "assets": [
+    {
+      "kind": "logo",
+      "path": "brand/harborline-logo.svg",
+      "brand_kit_id": "bk-harborline-2026"
+    },
+    {
+      "kind": "logo_reverse",
+      "path": "brand/harborline-logo-white.svg",
+      "brand_kit_id": "bk-harborline-2026",
+      "notes": "For the primary ground and any ground darker than #6E8A91."
+    },
+    {
+      "kind": "logo_mark",
+      "path": "brand/harborline-mark.svg",
+      "brand_kit_id": "bk-harborline-2026"
+    }
+  ]
+}

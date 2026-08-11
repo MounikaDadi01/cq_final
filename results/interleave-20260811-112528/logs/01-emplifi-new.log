@@ -1,0 +1,12 @@
+templates: templates match source (built 2026-08-11T17:43:29.347Z)
+/Users/mounikadadi/Downloads/characterquilt-work-trial/eval/scripts/launch-run.ts:95
+  if (!response.ok) throw new Error(`${path}: ${response.status} ${text.slice(0, 300)}`)
+                          ^
+
+
+Error: revisions?id=eq.create failed: {"error":"a campaign name and a headline are required"}&select=id,n,request_id,requests(kit_id,campaign_name,copy,plate_direction,inspirations,request_canvases(name,width,height,producible)): 400 {"code":"22P02","details":null,"hint":null,"message":"invalid input syntax for type uuid: \"create failed: {\"error\":\"a campaign name and a headline are required\"}\""}
+    at rest (/Users/mounikadadi/Downloads/characterquilt-work-trial/eval/scripts/launch-run.ts:95:27)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async <anonymous> (/Users/mounikadadi/Downloads/characterquilt-work-trial/eval/scripts/launch-run.ts:128:16)
+
+Node.js v22.16.0

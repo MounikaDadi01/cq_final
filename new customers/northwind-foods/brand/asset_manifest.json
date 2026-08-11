@@ -1,0 +1,21 @@
+{
+  "brand_kit_id": "bk-northwind-2026",
+  "assets": [
+    {
+      "kind": "logo",
+      "path": "brand/northwind-logo.svg",
+      "brand_kit_id": "bk-northwind-2026"
+    },
+    {
+      "kind": "logo_reverse",
+      "path": "brand/northwind-logo-white.svg",
+      "brand_kit_id": "bk-northwind-2026",
+      "notes": "For placement on photography and any ground darker than #6B7280."
+    },
+    {
+      "kind": "logo_mark",
+      "path": "brand/northwind-mark.svg",
+      "brand_kit_id": "bk-northwind-2026"
+    }
+  ]
+}

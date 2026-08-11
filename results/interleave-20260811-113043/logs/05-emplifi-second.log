@@ -1,0 +1,20 @@
+templates: templates match source (built 2026-08-11T17:43:29.347Z)
+continuing "Interleave C emplifi second" from rev 1
+brand: pulled 14 file(s) from brains/bk-emplifi-2026/
+inspirations: 0 of 0 requested usable (4 available for this kit)
+continuing request 8b16cda3-0acd-4385-bc6a-9649c7367b05 as rev 2 with no open comments
+request 8b16cda3-0acd-4385-bc6a-9649c7367b05
+revision fa05b7d8-f800-4562-8b89-c8b57ebce91f (n=2)
+run 3226fb94-24ea-4533-bb82-3fa891edefeb
+/Users/mounikadadi/Downloads/characterquilt-work-trial/eval/scripts/launch-run.ts:521
+if (gaps.length) throw new Error(`hydration is incomplete:\n  ${gaps.join('\n  ')}`)
+                       ^
+
+
+Error: hydration is incomplete:
+  an edit whose parent revision has an empty tree
+  an edit with no instruction to act on
+    at <anonymous> (/Users/mounikadadi/Downloads/characterquilt-work-trial/eval/scripts/launch-run.ts:521:24)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+
+Node.js v22.16.0

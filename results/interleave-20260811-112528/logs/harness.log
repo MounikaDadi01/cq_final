@@ -1,0 +1,38 @@
+11:25:29  interleave harness  quality=low  results=/Users/mounikadadi/Downloads/characterquilt-work-trial/results/interleave-20260811-112528
+11:25:30  emplifi kit=bk-emplifi-2026   kahua kit=bk-kahua-2026
+11:25:30  step 1  emplifi opens a new task
+11:25:31    create failed: {"error":"a campaign name and a headline are required"}
+11:25:31          request=11:25:31 revision=create failed: {"error":"a campaign name and a headline are required"}
+11:25:31  step 2  kahua opens a new task
+11:25:31    create failed: {"error":"a campaign name and a headline are required"}
+11:25:31          request=11:25:31 revision=create failed: {"error":"a campaign name and a headline are required"}
+11:25:31  launching both concurrently — two tenants, two boxes, at the same time
+11:25:33          pids 16228 16249
+11:25:33          both finished (exits: 1, 1)
+11:25:33  step 3  kahua edits theirs
+11:25:34  step 4  emplifi edits theirs
+11:25:34  launching both edits concurrently
+11:25:35          pids 16293 16316
+11:25:35          both finished (exits: 1, 1)
+11:25:35  step 5  emplifi opens a second task
+11:25:35    create failed: {"error":"a campaign name and a headline are required"}
+11:25:35          request=11:25:35 revision=create failed: {"error":"a campaign name and a headline are required"}
+11:25:36          finished (exit: 1)
+11:25:36  collecting outputs
+Traceback (most recent call last):
+  File "<stdin>", line 14, in <module>
+  File "<stdin>", line 10, in get
+  File "/Applications/Xcode.app/Contents/Developer/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/urllib/request.py", line 214, in urlopen
+    return opener.open(url, data, timeout)
+  File "/Applications/Xcode.app/Contents/Developer/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/urllib/request.py", line 523, in open
+    response = meth(req, response)
+  File "/Applications/Xcode.app/Contents/Developer/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/urllib/request.py", line 632, in http_response
+    response = self.parent.error(
+  File "/Applications/Xcode.app/Contents/Developer/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/urllib/request.py", line 561, in error
+    return self._call_chain(*args)
+  File "/Applications/Xcode.app/Contents/Developer/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/urllib/request.py", line 494, in _call_chain
+    result = func(*args)
+  File "/Applications/Xcode.app/Contents/Developer/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/urllib/request.py", line 641, in http_error_default
+    raise HTTPError(req.full_url, code, msg, hdrs, fp)
+urllib.error.HTTPError: HTTP Error 400: Bad Request
+11:25:36  done — /Users/mounikadadi/Downloads/characterquilt-work-trial/results/interleave-20260811-112528

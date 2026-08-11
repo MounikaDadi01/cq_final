@@ -1,0 +1,21 @@
+{
+  "brand_kit_id": "bk-meridian-2026",
+  "assets": [
+    {
+      "kind": "logo",
+      "path": "brand/meridian-logo.svg",
+      "brand_kit_id": "bk-meridian-2026"
+    },
+    {
+      "kind": "logo_reverse",
+      "path": "brand/meridian-logo-reverse.svg",
+      "brand_kit_id": "bk-meridian-2026",
+      "notes": "Reverse for dark grounds."
+    },
+    {
+      "kind": "logo_lockup",
+      "path": "brand/meridian-nhs-lockup.svg",
+      "brand_kit_id": "bk-meridian-2026"
+    }
+  ]
+}

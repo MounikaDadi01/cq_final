@@ -1,0 +1,509 @@
+{
+  "campaign": "kahua-lirr-east-side",
+  "brand_kit_id": "bk-kahua-2026",
+  "quality": "high",
+  "headline": "$11B of tunnel work, one system of record",
+  "resolved": {
+    "heading_family": "barlow",
+    "heading_substituted": true,
+    "heading_note": "no file for \"Barlow Condensed\"; nearest shipped family \"barlow\" at weight 700",
+    "body_family": "barlow",
+    "h1": "48px (prose, contested)"
+  },
+  "canvases": [
+    {
+      "canvas": "square",
+      "target": "1080x1080",
+      "generated": "1088x1088",
+      "anisotropy_pct": 0,
+      "render": "renders/square.png",
+      "plate": "html_square/assets/plate.png",
+      "html": "html_square/index.html",
+      "fonts_ok": true,
+      "font_problems": [],
+      "computed_fonts": [
+        {
+          "role": "text",
+          "line": "eyebrow",
+          "family": "brain-barlow-600",
+          "size": "14px",
+          "weight": "600"
+        },
+        {
+          "role": "text",
+          "line": "headline",
+          "family": "brain-barlow-700",
+          "size": "48px",
+          "weight": "700"
+        },
+        {
+          "role": "text",
+          "line": "subhead",
+          "family": "brain-barlow-400",
+          "size": "17px",
+          "weight": "400"
+        },
+        {
+          "role": "cta",
+          "line": "cta",
+          "family": "brain-barlow-600",
+          "size": "16px",
+          "weight": "600"
+        }
+      ],
+      "logo": "kahua-mark.svg",
+      "logo_reason": "sampled 2 corners; top-left measured 0.005 and carries \"logo_mark\", the strongest kind available on any of them",
+      "logo_corner": "top-left",
+      "logo_corners_considered": [
+        {
+          "corner": "top-left",
+          "luminance": 0.005,
+          "kind": "logo_mark"
+        },
+        {
+          "corner": "top-right",
+          "luminance": 0.005,
+          "kind": "logo_mark"
+        }
+      ],
+      "copy_ground": {
+        "luminance": 0.002,
+        "treatedAs": "dark",
+        "declared": "dark"
+      },
+      "text_colour_corrections": [],
+      "measured": [
+        {
+          "role": "logo",
+          "line": "logo",
+          "box": {
+            "x": 76,
+            "y": 76,
+            "width": 92,
+            "height": 92
+          },
+          "colours": []
+        },
+        {
+          "role": "text",
+          "line": "eyebrow",
+          "box": {
+            "x": 76,
+            "y": 670,
+            "width": 98,
+            "height": 18
+          },
+          "colours": [
+            "#F26B21"
+          ]
+        },
+        {
+          "role": "text",
+          "line": "headline",
+          "box": {
+            "x": 76,
+            "y": 712,
+            "width": 846,
+            "height": 49
+          },
+          "colours": [
+            "#FFFFFF"
+          ]
+        },
+        {
+          "role": "text",
+          "line": "subhead",
+          "box": {
+            "x": 76,
+            "y": 784,
+            "width": 418,
+            "height": 24
+          },
+          "colours": [
+            "#FFFFFF"
+          ]
+        },
+        {
+          "role": "cta",
+          "line": "cta",
+          "box": {
+            "x": 76,
+            "y": 832,
+            "width": 186,
+            "height": 41
+          },
+          "colours": [
+            "#FFFFFF",
+            "#F26B21"
+          ]
+        }
+      ],
+      "check_failures": [],
+      "check_unverifiable": [],
+      "contrast": [
+        {
+          "role": "text",
+          "line": "eyebrow",
+          "declaredColour": "#F26B21",
+          "behindColour": "#000810",
+          "ratio": 6.62
+        },
+        {
+          "role": "text",
+          "line": "headline",
+          "declaredColour": "#FFFFFF",
+          "behindColour": "#000810",
+          "ratio": 20.15
+        },
+        {
+          "role": "text",
+          "line": "subhead",
+          "declaredColour": "#FFFFFF",
+          "behindColour": "#000810",
+          "ratio": 20.15
+        },
+        {
+          "role": "cta",
+          "line": "cta",
+          "declaredColour": "#FFFFFF",
+          "behindColour": "#000810",
+          "ratio": 20.15
+        }
+      ],
+      "seconds": 0.4
+    },
+    {
+      "canvas": "landscape",
+      "target": "1200x628",
+      "generated": "3088x1616",
+      "anisotropy_pct": 0.0033,
+      "render": "renders/landscape.png",
+      "plate": "html_landscape/assets/plate.png",
+      "html": "html_landscape/index.html",
+      "fonts_ok": true,
+      "font_problems": [],
+      "computed_fonts": [
+        {
+          "role": "text",
+          "line": "eyebrow",
+          "family": "brain-barlow-600",
+          "size": "14px",
+          "weight": "600"
+        },
+        {
+          "role": "text",
+          "line": "headline",
+          "family": "brain-barlow-700",
+          "size": "48px",
+          "weight": "700"
+        },
+        {
+          "role": "text",
+          "line": "subhead",
+          "family": "brain-barlow-400",
+          "size": "17px",
+          "weight": "400"
+        },
+        {
+          "role": "cta",
+          "line": "cta",
+          "family": "brain-barlow-600",
+          "size": "16px",
+          "weight": "600"
+        }
+      ],
+      "logo": "kahua-mark.svg",
+      "logo_reason": "sampled 2 corners; top-left measured 0.003 and carries \"logo_mark\", the strongest kind available on any of them",
+      "logo_corner": "top-left",
+      "logo_corners_considered": [
+        {
+          "corner": "top-left",
+          "luminance": 0.003,
+          "kind": "logo_mark"
+        },
+        {
+          "corner": "top-right",
+          "luminance": 0.009,
+          "kind": "logo_mark"
+        }
+      ],
+      "copy_ground": {
+        "luminance": 0.005,
+        "treatedAs": "dark",
+        "declared": "dark"
+      },
+      "text_colour_corrections": [],
+      "measured": [
+        {
+          "role": "logo",
+          "line": "logo",
+          "box": {
+            "x": 44,
+            "y": 44,
+            "width": 53,
+            "height": 53
+          },
+          "colours": []
+        },
+        {
+          "role": "text",
+          "line": "eyebrow",
+          "box": {
+            "x": 44,
+            "y": 389,
+            "width": 98,
+            "height": 18
+          },
+          "colours": [
+            "#F26B21"
+          ]
+        },
+        {
+          "role": "text",
+          "line": "headline",
+          "box": {
+            "x": 44,
+            "y": 421,
+            "width": 846,
+            "height": 49
+          },
+          "colours": [
+            "#FFFFFF"
+          ]
+        },
+        {
+          "role": "text",
+          "line": "subhead",
+          "box": {
+            "x": 44,
+            "y": 483,
+            "width": 418,
+            "height": 24
+          },
+          "colours": [
+            "#FFFFFF"
+          ]
+        },
+        {
+          "role": "cta",
+          "line": "cta",
+          "box": {
+            "x": 44,
+            "y": 521,
+            "width": 186,
+            "height": 41
+          },
+          "colours": [
+            "#FFFFFF",
+            "#F26B21"
+          ]
+        }
+      ],
+      "check_failures": [],
+      "check_unverifiable": [],
+      "contrast": [
+        {
+          "role": "text",
+          "line": "eyebrow",
+          "declaredColour": "#F26B21",
+          "behindColour": "#101018",
+          "ratio": 6.22
+        },
+        {
+          "role": "text",
+          "line": "headline",
+          "declaredColour": "#FFFFFF",
+          "behindColour": "#101018",
+          "ratio": 18.93
+        },
+        {
+          "role": "text",
+          "line": "subhead",
+          "declaredColour": "#FFFFFF",
+          "behindColour": "#101018",
+          "ratio": 18.93
+        },
+        {
+          "role": "cta",
+          "line": "cta",
+          "declaredColour": "#FFFFFF",
+          "behindColour": "#101018",
+          "ratio": 18.93
+        }
+      ],
+      "seconds": 0.3
+    },
+    {
+      "canvas": "portrait",
+      "target": "1080x1350",
+      "generated": "1088x1360",
+      "anisotropy_pct": 0,
+      "render": "renders/portrait.png",
+      "plate": "html_portrait/assets/plate.png",
+      "html": "html_portrait/index.html",
+      "fonts_ok": true,
+      "font_problems": [],
+      "computed_fonts": [
+        {
+          "role": "text",
+          "line": "eyebrow",
+          "family": "brain-barlow-600",
+          "size": "14px",
+          "weight": "600"
+        },
+        {
+          "role": "text",
+          "line": "headline",
+          "family": "brain-barlow-700",
+          "size": "48px",
+          "weight": "700"
+        },
+        {
+          "role": "text",
+          "line": "subhead",
+          "family": "brain-barlow-400",
+          "size": "17px",
+          "weight": "400"
+        },
+        {
+          "role": "cta",
+          "line": "cta",
+          "family": "brain-barlow-600",
+          "size": "16px",
+          "weight": "600"
+        }
+      ],
+      "logo": "kahua-mark.svg",
+      "logo_reason": "sampled 2 corners; top-left measured 0.005 and carries \"logo_mark\", the strongest kind available on any of them",
+      "logo_corner": "top-left",
+      "logo_corners_considered": [
+        {
+          "corner": "top-left",
+          "luminance": 0.005,
+          "kind": "logo_mark"
+        },
+        {
+          "corner": "top-right",
+          "luminance": 0.009,
+          "kind": "logo_mark"
+        }
+      ],
+      "copy_ground": {
+        "luminance": 0.005,
+        "treatedAs": "dark",
+        "declared": "dark"
+      },
+      "text_colour_corrections": [],
+      "measured": [
+        {
+          "role": "logo",
+          "line": "logo",
+          "box": {
+            "x": 76,
+            "y": 76,
+            "width": 115,
+            "height": 115
+          },
+          "colours": []
+        },
+        {
+          "role": "text",
+          "line": "eyebrow",
+          "box": {
+            "x": 76,
+            "y": 837,
+            "width": 98,
+            "height": 18
+          },
+          "colours": [
+            "#F26B21"
+          ]
+        },
+        {
+          "role": "text",
+          "line": "headline",
+          "box": {
+            "x": 76,
+            "y": 879,
+            "width": 846,
+            "height": 49
+          },
+          "colours": [
+            "#FFFFFF"
+          ]
+        },
+        {
+          "role": "text",
+          "line": "subhead",
+          "box": {
+            "x": 76,
+            "y": 951,
+            "width": 418,
+            "height": 24
+          },
+          "colours": [
+            "#FFFFFF"
+          ]
+        },
+        {
+          "role": "cta",
+          "line": "cta",
+          "box": {
+            "x": 76,
+            "y": 999,
+            "width": 186,
+            "height": 41
+          },
+          "colours": [
+            "#FFFFFF",
+            "#F26B21"
+          ]
+        }
+      ],
+      "check_failures": [],
+      "check_unverifiable": [],
+      "contrast": [
+        {
+          "role": "text",
+          "line": "eyebrow",
+          "declaredColour": "#F26B21",
+          "behindColour": "#081018",
+          "ratio": 6.29
+        },
+        {
+          "role": "text",
+          "line": "headline",
+          "declaredColour": "#FFFFFF",
+          "behindColour": "#081018",
+          "ratio": 19.13
+        },
+        {
+          "role": "text",
+          "line": "subhead",
+          "declaredColour": "#FFFFFF",
+          "behindColour": "#081018",
+          "ratio": 19.13
+        },
+        {
+          "role": "cta",
+          "line": "cta",
+          "declaredColour": "#FFFFFF",
+          "behindColour": "#081018",
+          "ratio": 19.13
+        }
+      ],
+      "seconds": 0.6
+    },
+    {
+      "canvas": "leaderboard",
+      "skipped": true,
+      "reasons": [
+        "target aspect 8.09:1 exceeds the 3:1 ceiling, which binds the requested output size on both generate and edit"
+      ]
+    }
+  ],
+  "findings": [
+    "canvases: landscape has no aspect-exact legal size; generating at 3088x1616 leaves 0.0033% anisotropy",
+    "canvases: leaderboard 728x90 cannot be produced by gpt-image-2: target aspect 8.09:1 exceeds the 3:1 ceiling, which binds the requested output size on both generate and edit. Reported as a finding; the other canvases still ship."
+  ]
+}

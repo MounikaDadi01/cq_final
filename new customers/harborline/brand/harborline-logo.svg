@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="272" height="96" viewBox="0 0 272 96" role="img" aria-label="Harborline">
+<rect x="14" y="30" width="44" height="6" rx="2" fill="#0B3A45"/>
+<rect x="14" y="44" width="30" height="6" rx="2" fill="#1F7A8C"/>
+<circle cx="52" cy="61" r="7" fill="#00A878"/>
+<text x="78" y="60" font-family="sans-serif" font-size="32" font-weight="700" fill="#0A1416">harborline</text>
+</svg>

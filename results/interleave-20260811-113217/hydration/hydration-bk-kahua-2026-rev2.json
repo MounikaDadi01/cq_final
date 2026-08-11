@@ -1,0 +1,223 @@
+{
+  "kind": "generate",
+  "version": 1,
+  "run_id": "30030b55-fd32-4f71-9778-5a5b0a3e0fe8",
+  "revision_id": "e5dd4be1-2bcb-4d4e-8dfd-697b09d83941",
+  "brand_kit_id": "bk-kahua-2026",
+  "task": "new",
+  "parent_revision_id": null,
+  "edit_instruction": null,
+  "campaign": {
+    "name": "Interleave B kahua",
+    "copy": {
+      "cta": "Learn more",
+      "legal": null,
+      "eyebrow": null,
+      "subhead": "Interleave harness 20260811-113217",
+      "headline": "Every capital project, one system of record"
+    },
+    "plate_direction": null,
+    "inspirations": []
+  },
+  "canvases": [
+    {
+      "name": "square",
+      "width": 1080,
+      "height": 1080,
+      "producible": true
+    },
+    {
+      "name": "landscape",
+      "width": 1200,
+      "height": 628,
+      "producible": true
+    }
+  ],
+  "skill": {
+    "invoke": "design-generation",
+    "mount": {
+      "path": "/home/user/.claude/skills/design-generation/SKILL.md",
+      "lifetime": "baked",
+      "storageKey": null,
+      "purpose": "the contract every step of the build must satisfy"
+    }
+  },
+  "resolution_order": [
+    "hydration.json — the request: what to make, at which sizes, with which copy",
+    "skill design-generation — the contract every step must satisfy",
+    "DESIGN.md — the brand. Wins over every other artifact, including this file",
+    "brand/asset_manifest.json — staged assets, already filtered to this kit id",
+    "fonts/ — the families the kit actually ships, not the ones it names",
+    "context.resolved — substitutions and contested values already settled",
+    "context.conversation — what the human has already asked for",
+    "parent/ — on an edit, what the previous revision produced",
+    "inspirations/ — composition reference only, and only those attached above"
+  ],
+  "mounts": [
+    {
+      "path": "/home/user/hydration.json",
+      "lifetime": "job",
+      "storageKey": null,
+      "purpose": "this file — the request, the context, and the order to read things in"
+    },
+    {
+      "path": "/home/user/.claude/skills/design-generation/SKILL.md",
+      "lifetime": "baked",
+      "storageKey": null,
+      "purpose": "the contract every step of the build must satisfy"
+    },
+    {
+      "path": "/home/user/brain/DESIGN.md",
+      "lifetime": "kit",
+      "storageKey": "bk-kahua-2026/DESIGN.md",
+      "purpose": "the brand — outranks everything, including the request",
+      "digest": "6f179bd8b5cee9219ea5fb69e02bb2c23a5a59f5dcba8122265b77b1ca79c24b"
+    },
+    {
+      "path": "/home/user/brain/README.md",
+      "lifetime": "kit",
+      "storageKey": "bk-kahua-2026/README.md",
+      "purpose": "what each file is, and its authority",
+      "digest": "8b060189cb99719f4ce967dd8c6cb38f2da649d5a907accd390509426ca4a88c"
+    },
+    {
+      "path": "/home/user/brain/brand/asset_manifest.json",
+      "lifetime": "kit",
+      "storageKey": "bk-kahua-2026/brand/asset_manifest.json",
+      "purpose": "staged assets, already filtered to this kit",
+      "digest": "ebad36e7fcdb23f56d9805798468a38d611a0d62205d64d5ace561a00a7cc2d5"
+    },
+    {
+      "path": "/home/user/brain/brand/kahua-logo-white.svg",
+      "lifetime": "kit",
+      "storageKey": "bk-kahua-2026/brand/partner-lockup.svg",
+      "purpose": "logo_reverse — declared brand/kahua-logo-white.svg, which is not in the kit; resolved to brand/partner-lockup.svg — identical element skeleton to \"logo\" (7 elements) and the same label \"kahua\"; #FFFFFF → #1B3A5C, #16202B → #FFFFFF, moving toward the palette's light extreme #FFFFFF"
+    },
+    {
+      "path": "/home/user/brain/brand/partner-lockup.svg",
+      "lifetime": "kit",
+      "storageKey": "bk-kahua-2026/brand/partner-lockup.svg",
+      "purpose": "logo_lockup — Co-marketing lockup, reverse. Staged 2026-03-11.",
+      "digest": "da239a3798e6fd9f8330193d5d282d18ef70cf334010384d7d6e88204d6bb886"
+    },
+    {
+      "path": "/home/user/brain/brand/kahua-logo.svg",
+      "lifetime": "kit",
+      "storageKey": "bk-kahua-2026/brand/kahua-logo.svg",
+      "purpose": "logo",
+      "digest": "f454cb7c6f19b3b9a0b2ba26f3830b6af82b021f51c140abcbb12ac9f9a1170f"
+    },
+    {
+      "path": "/home/user/brain/brand/kahua-mark.svg",
+      "lifetime": "kit",
+      "storageKey": "bk-kahua-2026/brand/kahua-mark.svg",
+      "purpose": "logo_mark",
+      "digest": "f25c6cd5c0e811ff7382792d8d84abb6d2046d8a95db46a212d3370db27b6111"
+    },
+    {
+      "path": "/home/user/brain/fonts/barlow_400_normal.ttf",
+      "lifetime": "kit",
+      "storageKey": "bk-kahua-2026/fonts/barlow_400_normal.ttf",
+      "purpose": "barlow 400",
+      "digest": "a35caa4687f434d66453c1fe423d7074cfa9fd7ab80c19b0780f3862887d2fc9"
+    },
+    {
+      "path": "/home/user/brain/fonts/barlow_500_normal.ttf",
+      "lifetime": "kit",
+      "storageKey": "bk-kahua-2026/fonts/barlow_500_normal.ttf",
+      "purpose": "barlow 500",
+      "digest": "91c841fdfa8e7b94ffedbb983a363947ba6ed720f3bbf0c71d48b618053655bc"
+    },
+    {
+      "path": "/home/user/brain/fonts/barlow_600_normal.ttf",
+      "lifetime": "kit",
+      "storageKey": "bk-kahua-2026/fonts/barlow_600_normal.ttf",
+      "purpose": "barlow 600",
+      "digest": "c15439e7a03af5714282ec1780ff7b0214ec6a7db96300b54928dbcd2569ca0c"
+    },
+    {
+      "path": "/home/user/brain/fonts/barlow_700_normal.ttf",
+      "lifetime": "kit",
+      "storageKey": "bk-kahua-2026/fonts/barlow_700_normal.ttf",
+      "purpose": "barlow 700",
+      "digest": "74103fd6d41bc32c63aa2e6eb3db619ddb80ce9ca1b1420d5548a23b8ee5d154"
+    }
+  ],
+  "context": {
+    "conversation": [],
+    "resolved": {
+      "palette": {
+        "primary": "#1B3A5C",
+        "accent": "#F26B21",
+        "surface": "#FFFFFF",
+        "ink": "#16202B",
+        "muted": "#6B7A88"
+      },
+      "type_scale": {
+        "h1": "56px",
+        "h2": "36px",
+        "h3": "24px",
+        "body": "17px",
+        "caption": "14px"
+      },
+      "heading_family": "barlow",
+      "body_family": "barlow",
+      "heading_substituted": true,
+      "heading_note": "no file for \"Barlow Condensed\"; nearest shipped family \"barlow\" at weight 700",
+      "contested": [
+        "h1 resolved to 48px from prose; the kit states it twice"
+      ],
+      "ground_switch_point": {
+        "value": 0.18822440497750942,
+        "source": "logo_reverse note names #6B7A88"
+      }
+    },
+    "known_findings": [
+      {
+        "code": "font-substituted",
+        "severity": "review",
+        "detail": "no file for \"Barlow Condensed\"; nearest shipped family \"barlow\" at weight 700"
+      },
+      {
+        "code": "design-doc-self-conflict",
+        "severity": "review",
+        "detail": "DESIGN.md states h1 twice: table says 56px, prose says 48px; prose governs and is more specific. Resolved to 48px, deterministically, so every run agrees."
+      },
+      {
+        "code": "asset-reverse-recovered",
+        "severity": "review",
+        "detail": "brand/kahua-logo-white.svg is listed as \"logo_reverse\" but no file exists; brand/partner-lockup.svg was used instead — identical element skeleton to \"logo\" (7 elements) and the same label \"kahua\"; #FFFFFF → #1B3A5C, #16202B → #FFFFFF, moving toward the palette's light extreme #FFFFFF"
+      }
+    ],
+    "parent": null
+  },
+  "withheld": [
+    {
+      "path": "brand/tokens.json",
+      "reason": "a cache with no authority that disagrees with DESIGN.md and is newer than it; withheld so nothing in the box can resolve a brand value from it"
+    }
+  ],
+  "outputs": {
+    "root": "/home/user/work",
+    "save_with": "save_work",
+    "checkpoint_every_seconds": 60,
+    "expected_tree": [
+      "html_square/index.html",
+      "html_square/assets/plate.png",
+      "renders/square.png",
+      "html_landscape/index.html",
+      "html_landscape/assets/plate.png",
+      "renders/landscape.png",
+      "RESULT.json"
+    ]
+  },
+  "egress": [
+    "api.openai.com — image generation and the agent model",
+    "<project>.supabase.co — brain reads and work writes, scoped by the run token"
+  ],
+  "limits": {
+    "sandbox_timeout_seconds": 1200,
+    "image_quality": "low",
+    "max_image_calls": 4
+  }
+}

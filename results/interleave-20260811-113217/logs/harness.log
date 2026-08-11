@@ -1,0 +1,32 @@
+11:32:17  interleave harness  quality=low  results=/Users/mounikadadi/Downloads/characterquilt-work-trial/results/interleave-20260811-113217
+11:32:18  emplifi kit=bk-emplifi-2026   kahua kit=bk-kahua-2026
+11:32:18  step 1  emplifi opens a new task
+11:32:27          request=24dd9041-87e3-4afc-97ab-eaf0063d5593 revision=cc8e7a13-b949-41c2-90b0-f6ccd457cec9
+11:32:27  step 2  kahua opens a new task
+11:32:37          request=54d17e15-2aa2-49c0-9145-dcb35ecfa399 revision=84277b2f-e08b-43c3-9afe-1fc68ee53be0
+11:32:37  launching both concurrently — two tenants, two boxes, at the same time
+11:32:37          pids 18790 18791
+11:32:40          both finished (exits: 1, 1)
+11:32:40  rendered revisions: kahua=e5dd4be1-2bcb-4d4e-8dfd-697b09d83941 emplifi=c10757ed-a1e8-4266-8f53-55134d4c000a
+11:32:40  step 3  kahua edits theirs
+11:32:41  step 4  emplifi edits theirs
+11:32:41  launching both edits concurrently
+11:32:41          pids 18902 18903
+11:34:08          both finished (exits: 0, 0)
+11:34:08  step 5  emplifi opens a second task
+11:34:18          request=14a38b4b-beed-4687-bc3c-b45f785d8c07 revision=6c4dcb45-e6bc-4551-a819-376291a290d9
+11:34:21          finished (exit: 1)
+11:34:21  collecting outputs
+  bk-emplifi-2026      rev1 running    0 render(s)  Interleave A emplifi
+  bk-emplifi-2026      rev2 complete   2 render(s)  Interleave A emplifi
+  bk-kahua-2026        rev1 running    0 render(s)  Interleave B kahua
+  bk-kahua-2026        rev2 complete   2 render(s)  Interleave B kahua
+  bk-emplifi-2026      rev1 running    0 render(s)  Interleave C emplifi second
+  bk-emplifi-2026      rev2 draft      0 render(s)  Interleave C emplifi second
+11:34:25  done — /Users/mounikadadi/Downloads/characterquilt-work-trial/results/interleave-20260811-113217
+  hydration: hydration-bk-emplifi-2026-rev2.json
+  hydration: hydration-bk-kahua-2026-rev2.json
+  output:    bk-emplifi-2026-rev2-landscape.png
+  output:    bk-emplifi-2026-rev2-square.png
+  output:    bk-kahua-2026-rev2-landscape.png
+  output:    bk-kahua-2026-rev2-square.png

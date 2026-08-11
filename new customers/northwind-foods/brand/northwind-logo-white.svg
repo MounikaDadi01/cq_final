@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="260" height="96" viewBox="0 0 260 96" role="img" aria-label="northwind">
+<path d="M14 30 C14 16, 26 8, 42 8 C42 24, 30 32, 14 30 Z" fill="#FFFFFF"/>
+<circle cx="30" cy="62" r="7" fill="#F59E0B"/>
+<text x="70" y="62" font-family="sans-serif" font-size="34" font-weight="700" fill="#FFFFFF">northwind</text>
+</svg>

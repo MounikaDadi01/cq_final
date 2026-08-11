@@ -1,0 +1,21 @@
+{
+  "brand_kit_id": "bk-atlas-2026",
+  "assets": [
+    {
+      "kind": "logo",
+      "path": "brand/atlas-wordmark.svg",
+      "brand_kit_id": "bk-atlas-2026"
+    },
+    {
+      "kind": "logo_mark",
+      "path": "brand/atlas-glyph.svg",
+      "brand_kit_id": "bk-atlas-2026"
+    },
+    {
+      "kind": "logo_lockup",
+      "path": "brand/atlas-with-partner.svg",
+      "brand_kit_id": "bk-atlas-2026",
+      "notes": "Co-marketing lockup. Reverse only."
+    }
+  ]
+}

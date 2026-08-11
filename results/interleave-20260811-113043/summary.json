@@ -1,0 +1,66 @@
+[
+  {
+    "campaign": "Interleave A emplifi",
+    "kit": "bk-emplifi-2026",
+    "rev": 1,
+    "status": "running",
+    "renders": 0,
+    "artifacts": 0
+  },
+  {
+    "campaign": "Interleave A emplifi",
+    "kit": "bk-emplifi-2026",
+    "rev": 2,
+    "status": "draft",
+    "renders": 0,
+    "artifacts": 0
+  },
+  {
+    "campaign": "Interleave A emplifi",
+    "kit": "bk-emplifi-2026",
+    "rev": 3,
+    "status": "draft",
+    "renders": 0,
+    "artifacts": 0
+  },
+  {
+    "campaign": "Interleave B kahua",
+    "kit": "bk-kahua-2026",
+    "rev": 1,
+    "status": "running",
+    "renders": 0,
+    "artifacts": 0
+  },
+  {
+    "campaign": "Interleave B kahua",
+    "kit": "bk-kahua-2026",
+    "rev": 2,
+    "status": "draft",
+    "renders": 0,
+    "artifacts": 0
+  },
+  {
+    "campaign": "Interleave B kahua",
+    "kit": "bk-kahua-2026",
+    "rev": 3,
+    "status": "draft",
+    "renders": 0,
+    "artifacts": 0
+  },
+  {
+    "campaign": "Interleave C emplifi second",
+    "kit": "bk-emplifi-2026",
+    "rev": 1,
+    "status": "running",
+    "renders": 0,
+    "artifacts": 0
+  },
+  {
+    "campaign": "Interleave C emplifi second",
+    "kit": "bk-emplifi-2026",
+    "rev": 2,
+    "status": "draft",
+    "renders": 0,
+    "artifacts": 0
+  }
+]

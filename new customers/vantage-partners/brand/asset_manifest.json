@@ -1,0 +1,16 @@
+{
+  "brand_kit_id": "bk-vantage-2026",
+  "assets": [
+    {
+      "kind": "logo",
+      "path": "brand/vantage.svg",
+      "brand_kit_id": "bk-vantage-2026"
+    },
+    {
+      "kind": "logo",
+      "path": "brand/borrowed-mark.svg",
+      "brand_kit_id": "bk-northwind-2026",
+      "notes": "Filed here by mistake during a co-marketing push."
+    }
+  ]
+}

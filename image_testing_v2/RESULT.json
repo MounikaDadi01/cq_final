@@ -1,0 +1,742 @@
+{
+  "campaigns": [
+    {
+      "campaign": "v2-emplifi-commerce-signals",
+      "brand_kit_id": "bk-emplifi-2026",
+      "quality": "high",
+      "headline": "Every commerce signal, on one timeline",
+      "resolved": {
+        "heading_family": "inter",
+        "heading_substituted": false,
+        "heading_note": null,
+        "body_family": "inter",
+        "h1": "48px (table)"
+      },
+      "canvases": [
+        {
+          "canvas": "square",
+          "target": "1080x1080",
+          "generated": "1088x1088",
+          "anisotropy_pct": 0,
+          "render": "renders/square.png",
+          "plate": "html_square/assets/plate.png",
+          "html": "html_square/index.html",
+          "fonts_ok": true,
+          "font_problems": [],
+          "computed_fonts": [
+            {
+              "role": "text",
+              "line": "eyebrow",
+              "family": "brain-inter-600",
+              "size": "13px",
+              "weight": "600"
+            },
+            {
+              "role": "text",
+              "line": "headline",
+              "family": "brain-inter-700",
+              "size": "48px",
+              "weight": "700"
+            },
+            {
+              "role": "text",
+              "line": "subhead",
+              "family": "brain-inter-400",
+              "size": "16px",
+              "weight": "400"
+            },
+            {
+              "role": "cta",
+              "line": "cta",
+              "family": "brain-inter-600",
+              "size": "15px",
+              "weight": "600"
+            }
+          ],
+          "logo": "emplifi-logo-white.svg",
+          "logo_reason": "plate mean 0.038 is dark against 0.179 (no threshold stated by the kit; computed crossover), so \"logo_reverse\" (identification rank 0) is the variant; bottom-left placed it with 0/8 cells disagreeing",
+          "logo_corner": "bottom-left",
+          "logo_corners_considered": [
+            {
+              "corner": "bottom-left",
+              "luminance": 0.038,
+              "conflictingCells": 0,
+              "cells": 8,
+              "eligible": true
+            },
+            {
+              "corner": "bottom-right",
+              "luminance": 0.791,
+              "conflictingCells": 8,
+              "cells": 8,
+              "eligible": false
+            }
+          ],
+          "logo_ground": {
+            "plateLuminance": 0.038,
+            "groundIsDark": true,
+            "switchPoint": 0.179,
+            "switchPointSource": "no threshold stated by the kit; computed crossover",
+            "straddled": false
+          },
+          "inspirations_attached": [
+            "emplifi-shoppable-video.png"
+          ],
+          "copy_ground": {
+            "luminance": 0.038,
+            "treatedAs": "dark",
+            "declared": "dark"
+          },
+          "text_colour_corrections": [
+            "eyebrow: #6765FE on #103860 was 2.77:1 → #FFFFFF at 11.95:1"
+          ],
+          "measured": [
+            {
+              "role": "logo",
+              "line": "logo",
+              "box": {
+                "x": 76,
+                "y": 912,
+                "width": 311,
+                "height": 92
+              },
+              "colours": []
+            },
+            {
+              "role": "text",
+              "line": "eyebrow",
+              "box": {
+                "x": 76,
+                "y": 184,
+                "width": 169,
+                "height": 16
+              },
+              "colours": [
+                "#FFFFFF"
+              ]
+            },
+            {
+              "role": "text",
+              "line": "headline",
+              "box": {
+                "x": 76,
+                "y": 224,
+                "width": 928,
+                "height": 104
+              },
+              "colours": [
+                "#FFFFFF"
+              ]
+            },
+            {
+              "role": "text",
+              "line": "subhead",
+              "box": {
+                "x": 76,
+                "y": 352,
+                "width": 512,
+                "height": 24
+              },
+              "colours": [
+                "#FFFFFF"
+              ]
+            },
+            {
+              "role": "cta",
+              "line": "cta",
+              "box": {
+                "x": 76,
+                "y": 400,
+                "width": 158,
+                "height": 44
+              },
+              "colours": [
+                "#FF5A21"
+              ]
+            }
+          ],
+          "check_failures": [],
+          "check_unverifiable": [],
+          "contrast": [
+            {
+              "role": "text",
+              "line": "eyebrow",
+              "declaredColour": "#FFFFFF",
+              "behindColour": "#103860",
+              "ratio": 11.95
+            },
+            {
+              "role": "text",
+              "line": "headline",
+              "declaredColour": "#FFFFFF",
+              "behindColour": "#103860",
+              "ratio": 11.95
+            },
+            {
+              "role": "text",
+              "line": "subhead",
+              "declaredColour": "#FFFFFF",
+              "behindColour": "#103860",
+              "ratio": 11.95
+            },
+            {
+              "role": "cta",
+              "line": "cta",
+              "declaredColour": "#FF5A21",
+              "behindColour": "#103860",
+              "ratio": 3.83
+            }
+          ],
+          "seconds": 102.8
+        },
+        {
+          "canvas": "landscape",
+          "target": "1200x628",
+          "generated": "3088x1616",
+          "anisotropy_pct": 0.0033,
+          "render": "renders/landscape.png",
+          "plate": "html_landscape/assets/plate.png",
+          "html": "html_landscape/index.html",
+          "fonts_ok": true,
+          "font_problems": [],
+          "computed_fonts": [
+            {
+              "role": "text",
+              "line": "eyebrow",
+              "family": "brain-inter-600",
+              "size": "13px",
+              "weight": "600"
+            },
+            {
+              "role": "text",
+              "line": "headline",
+              "family": "brain-inter-700",
+              "size": "48px",
+              "weight": "700"
+            },
+            {
+              "role": "text",
+              "line": "subhead",
+              "family": "brain-inter-400",
+              "size": "16px",
+              "weight": "400"
+            },
+            {
+              "role": "cta",
+              "line": "cta",
+              "family": "brain-inter-600",
+              "size": "15px",
+              "weight": "600"
+            }
+          ],
+          "logo": "emplifi-logo-white.svg",
+          "logo_reason": "plate mean 0.046 is dark against 0.179 (no threshold stated by the kit; computed crossover), so \"logo_reverse\" (identification rank 0) is the variant; bottom-left placed it with 0/8 cells disagreeing",
+          "logo_corner": "bottom-left",
+          "logo_corners_considered": [
+            {
+              "corner": "bottom-left",
+              "luminance": 0.046,
+              "conflictingCells": 0,
+              "cells": 8,
+              "eligible": true
+            },
+            {
+              "corner": "bottom-right",
+              "luminance": 0.735,
+              "conflictingCells": 8,
+              "cells": 8,
+              "eligible": false
+            }
+          ],
+          "logo_ground": {
+            "plateLuminance": 0.046,
+            "groundIsDark": true,
+            "switchPoint": 0.179,
+            "switchPointSource": "no threshold stated by the kit; computed crossover",
+            "straddled": false
+          },
+          "inspirations_attached": [
+            "emplifi-shoppable-video.png"
+          ],
+          "copy_ground": {
+            "luminance": 0.037,
+            "treatedAs": "dark",
+            "declared": "dark"
+          },
+          "text_colour_corrections": [
+            "eyebrow: #6765FE on #083860 was 2.79:1 → #FFFFFF at 12.04:1"
+          ],
+          "measured": [
+            {
+              "role": "logo",
+              "line": "logo",
+              "box": {
+                "x": 44,
+                "y": 531,
+                "width": 179,
+                "height": 53
+              },
+              "colours": []
+            },
+            {
+              "role": "text",
+              "line": "eyebrow",
+              "box": {
+                "x": 44,
+                "y": 107,
+                "width": 169,
+                "height": 16
+              },
+              "colours": [
+                "#FFFFFF"
+              ]
+            },
+            {
+              "role": "text",
+              "line": "headline",
+              "box": {
+                "x": 44,
+                "y": 137,
+                "width": 931,
+                "height": 52
+              },
+              "colours": [
+                "#FFFFFF"
+              ]
+            },
+            {
+              "role": "text",
+              "line": "subhead",
+              "box": {
+                "x": 44,
+                "y": 203,
+                "width": 512,
+                "height": 24
+              },
+              "colours": [
+                "#FFFFFF"
+              ]
+            },
+            {
+              "role": "cta",
+              "line": "cta",
+              "box": {
+                "x": 44,
+                "y": 241,
+                "width": 158,
+                "height": 44
+              },
+              "colours": [
+                "#FF5A21"
+              ]
+            }
+          ],
+          "check_failures": [],
+          "check_unverifiable": [],
+          "contrast": [
+            {
+              "role": "text",
+              "line": "eyebrow",
+              "declaredColour": "#FFFFFF",
+              "behindColour": "#083860",
+              "ratio": 12.04
+            },
+            {
+              "role": "text",
+              "line": "headline",
+              "declaredColour": "#FFFFFF",
+              "behindColour": "#083860",
+              "ratio": 12.04
+            },
+            {
+              "role": "text",
+              "line": "subhead",
+              "declaredColour": "#FFFFFF",
+              "behindColour": "#083860",
+              "ratio": 12.04
+            },
+            {
+              "role": "cta",
+              "line": "cta",
+              "declaredColour": "#FF5A21",
+              "behindColour": "#084060",
+              "ratio": 3.52
+            }
+          ],
+          "seconds": 72.5
+        }
+      ],
+      "findings": [
+        "canvases: landscape has no aspect-exact legal size; generating at 3088x1616 leaves 0.0033% anisotropy"
+      ]
+    },
+    {
+      "campaign": "v2-kahua-daylight-handover",
+      "brand_kit_id": "bk-kahua-2026",
+      "quality": "high",
+      "headline": "Handover packages closed in days, not months",
+      "resolved": {
+        "heading_family": "barlow",
+        "heading_substituted": true,
+        "heading_note": "no file for \"Barlow Condensed\"; nearest shipped family \"barlow\" at weight 700",
+        "body_family": "barlow",
+        "h1": "48px (prose, contested)"
+      },
+      "canvases": [
+        {
+          "canvas": "square",
+          "target": "1080x1080",
+          "generated": "1088x1088",
+          "anisotropy_pct": 0,
+          "render": "renders/square.png",
+          "plate": "html_square/assets/plate.png",
+          "html": "html_square/index.html",
+          "fonts_ok": true,
+          "font_problems": [],
+          "computed_fonts": [
+            {
+              "role": "text",
+              "line": "eyebrow",
+              "family": "brain-barlow-600",
+              "size": "14px",
+              "weight": "600"
+            },
+            {
+              "role": "text",
+              "line": "headline",
+              "family": "brain-barlow-700",
+              "size": "48px",
+              "weight": "700"
+            },
+            {
+              "role": "text",
+              "line": "subhead",
+              "family": "brain-barlow-400",
+              "size": "17px",
+              "weight": "400"
+            },
+            {
+              "role": "cta",
+              "line": "cta",
+              "family": "brain-barlow-600",
+              "size": "15px",
+              "weight": "600"
+            }
+          ],
+          "logo": "kahua-logo.svg",
+          "logo_reason": "plate mean 0.939 is light against 0.188 (logo_reverse note names #6B7A88), so \"logo\" (identification rank 0) is the variant; bottom-right placed it with 0/8 cells disagreeing",
+          "logo_corner": "bottom-right",
+          "logo_corners_considered": [
+            {
+              "corner": "bottom-left",
+              "luminance": 0.631,
+              "conflictingCells": 3,
+              "cells": 8,
+              "eligible": false
+            },
+            {
+              "corner": "bottom-right",
+              "luminance": 0.939,
+              "conflictingCells": 0,
+              "cells": 8,
+              "eligible": true
+            }
+          ],
+          "logo_ground": {
+            "plateLuminance": 0.939,
+            "groundIsDark": false,
+            "switchPoint": 0.188,
+            "switchPointSource": "logo_reverse note names #6B7A88",
+            "straddled": false
+          },
+          "inspirations_attached": [],
+          "copy_ground": {
+            "luminance": 0.956,
+            "treatedAs": "light",
+            "declared": "light"
+          },
+          "text_colour_corrections": [
+            "eyebrow: #F26B21 on #F8F8F8 was 2.87:1 → #16202B at 15.50:1"
+          ],
+          "measured": [
+            {
+              "role": "logo",
+              "line": "logo",
+              "box": {
+                "x": 736,
+                "y": 912,
+                "width": 268,
+                "height": 92
+              },
+              "colours": []
+            },
+            {
+              "role": "text",
+              "line": "eyebrow",
+              "box": {
+                "x": 76,
+                "y": 184,
+                "width": 95,
+                "height": 18
+              },
+              "colours": [
+                "#16202B"
+              ]
+            },
+            {
+              "role": "text",
+              "line": "headline",
+              "box": {
+                "x": 76,
+                "y": 226,
+                "width": 928,
+                "height": 98
+              },
+              "colours": [
+                "#16202B"
+              ]
+            },
+            {
+              "role": "text",
+              "line": "subhead",
+              "box": {
+                "x": 76,
+                "y": 347,
+                "width": 370,
+                "height": 25
+              },
+              "colours": [
+                "#16202B"
+              ]
+            },
+            {
+              "role": "cta",
+              "line": "cta",
+              "box": {
+                "x": 76,
+                "y": 396,
+                "width": 174,
+                "height": 39
+              },
+              "colours": [
+                "#FFFFFF",
+                "#F26B21"
+              ]
+            }
+          ],
+          "check_failures": [],
+          "check_unverifiable": [],
+          "contrast": [
+            {
+              "role": "text",
+              "line": "eyebrow",
+              "declaredColour": "#16202B",
+              "behindColour": "#F8F8F8",
+              "ratio": 15.5
+            },
+            {
+              "role": "text",
+              "line": "headline",
+              "declaredColour": "#16202B",
+              "behindColour": "#FFF8FF",
+              "ratio": 15.78
+            },
+            {
+              "role": "text",
+              "line": "subhead",
+              "declaredColour": "#16202B",
+              "behindColour": "#FFF8FF",
+              "ratio": 15.78
+            },
+            {
+              "role": "cta",
+              "line": "cta",
+              "declaredColour": "#FFFFFF",
+              "behindColour": "#FFF8FF",
+              "ratio": 1.04
+            }
+          ],
+          "seconds": 114.7
+        },
+        {
+          "canvas": "landscape",
+          "target": "1200x628",
+          "generated": "3088x1616",
+          "anisotropy_pct": 0.0033,
+          "render": "renders/landscape.png",
+          "plate": "html_landscape/assets/plate.png",
+          "html": "html_landscape/index.html",
+          "fonts_ok": true,
+          "font_problems": [],
+          "computed_fonts": [
+            {
+              "role": "text",
+              "line": "eyebrow",
+              "family": "brain-barlow-600",
+              "size": "14px",
+              "weight": "600"
+            },
+            {
+              "role": "text",
+              "line": "headline",
+              "family": "brain-barlow-700",
+              "size": "48px",
+              "weight": "700"
+            },
+            {
+              "role": "text",
+              "line": "subhead",
+              "family": "brain-barlow-400",
+              "size": "17px",
+              "weight": "400"
+            },
+            {
+              "role": "cta",
+              "line": "cta",
+              "family": "brain-barlow-600",
+              "size": "15px",
+              "weight": "600"
+            }
+          ],
+          "logo": "kahua-logo.svg",
+          "logo_reason": "plate mean 1.000 is light against 0.188 (logo_reverse note names #6B7A88), so \"logo\" (identification rank 0) is the variant; bottom-right placed it with 0/8 cells disagreeing",
+          "logo_corner": "bottom-right",
+          "logo_corners_considered": [
+            {
+              "corner": "bottom-left",
+              "luminance": 0.807,
+              "conflictingCells": 5,
+              "cells": 8,
+              "eligible": false
+            },
+            {
+              "corner": "bottom-right",
+              "luminance": 1,
+              "conflictingCells": 0,
+              "cells": 8,
+              "eligible": true
+            }
+          ],
+          "logo_ground": {
+            "plateLuminance": 1,
+            "groundIsDark": false,
+            "switchPoint": 0.188,
+            "switchPointSource": "logo_reverse note names #6B7A88",
+            "straddled": false
+          },
+          "inspirations_attached": [],
+          "copy_ground": {
+            "luminance": 1,
+            "treatedAs": "light",
+            "declared": "light"
+          },
+          "text_colour_corrections": [
+            "eyebrow: #F26B21 on #FFF8FF was 2.92:1 → #16202B at 15.78:1"
+          ],
+          "measured": [
+            {
+              "role": "logo",
+              "line": "logo",
+              "box": {
+                "x": 1001,
+                "y": 531,
+                "width": 155,
+                "height": 53
+              },
+              "colours": []
+            },
+            {
+              "role": "text",
+              "line": "eyebrow",
+              "box": {
+                "x": 44,
+                "y": 107,
+                "width": 95,
+                "height": 18
+              },
+              "colours": [
+                "#16202B"
+              ]
+            },
+            {
+              "role": "text",
+              "line": "headline",
+              "box": {
+                "x": 44,
+                "y": 139,
+                "width": 988,
+                "height": 49
+              },
+              "colours": [
+                "#16202B"
+              ]
+            },
+            {
+              "role": "text",
+              "line": "subhead",
+              "box": {
+                "x": 44,
+                "y": 201,
+                "width": 370,
+                "height": 25
+              },
+              "colours": [
+                "#16202B"
+              ]
+            },
+            {
+              "role": "cta",
+              "line": "cta",
+              "box": {
+                "x": 44,
+                "y": 240,
+                "width": 174,
+                "height": 39
+              },
+              "colours": [
+                "#FFFFFF",
+                "#F26B21"
+              ]
+            }
+          ],
+          "check_failures": [],
+          "check_unverifiable": [],
+          "contrast": [
+            {
+              "role": "text",
+              "line": "eyebrow",
+              "declaredColour": "#16202B",
+              "behindColour": "#FFF8FF",
+              "ratio": 15.78
+            },
+            {
+              "role": "text",
+              "line": "headline",
+              "declaredColour": "#16202B",
+              "behindColour": "#FFFFFF",
+              "ratio": 16.46
+            },
+            {
+              "role": "text",
+              "line": "subhead",
+              "declaredColour": "#16202B",
+              "behindColour": "#FFFFFF",
+              "ratio": 16.46
+            },
+            {
+              "role": "cta",
+              "line": "cta",
+              "declaredColour": "#FFFFFF",
+              "behindColour": "#FFFFFF",
+              "ratio": 1
+            }
+          ],
+          "seconds": 74.7
+        }
+      ],
+      "findings": [
+        "canvases: landscape has no aspect-exact legal size; generating at 3088x1616 leaves 0.0033% anisotropy"
+      ]
+    }
+  ]
+}

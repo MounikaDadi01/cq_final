@@ -1,0 +1,221 @@
+{
+  "kind": "generate",
+  "version": 1,
+  "run_id": "4d6a0c11-e0e1-4b72-beb3-91984bb83dea",
+  "revision_id": "c10757ed-a1e8-4266-8f53-55134d4c000a",
+  "brand_kit_id": "bk-emplifi-2026",
+  "task": "new",
+  "parent_revision_id": null,
+  "edit_instruction": null,
+  "campaign": {
+    "name": "Interleave A emplifi",
+    "copy": {
+      "cta": "Learn more",
+      "legal": null,
+      "eyebrow": null,
+      "subhead": "Interleave harness 20260811-113217",
+      "headline": "Benchmarks your team will actually use"
+    },
+    "plate_direction": null,
+    "inspirations": []
+  },
+  "canvases": [
+    {
+      "name": "square",
+      "width": 1080,
+      "height": 1080,
+      "producible": true
+    },
+    {
+      "name": "landscape",
+      "width": 1200,
+      "height": 628,
+      "producible": true
+    }
+  ],
+  "skill": {
+    "invoke": "design-generation",
+    "mount": {
+      "path": "/home/user/.claude/skills/design-generation/SKILL.md",
+      "lifetime": "baked",
+      "storageKey": null,
+      "purpose": "the contract every step of the build must satisfy"
+    }
+  },
+  "resolution_order": [
+    "hydration.json — the request: what to make, at which sizes, with which copy",
+    "skill design-generation — the contract every step must satisfy",
+    "DESIGN.md — the brand. Wins over every other artifact, including this file",
+    "brand/asset_manifest.json — staged assets, already filtered to this kit id",
+    "fonts/ — the families the kit actually ships, not the ones it names",
+    "context.resolved — substitutions and contested values already settled",
+    "context.conversation — what the human has already asked for",
+    "parent/ — on an edit, what the previous revision produced",
+    "inspirations/ — composition reference only, and only those attached above"
+  ],
+  "mounts": [
+    {
+      "path": "/home/user/hydration.json",
+      "lifetime": "job",
+      "storageKey": null,
+      "purpose": "this file — the request, the context, and the order to read things in"
+    },
+    {
+      "path": "/home/user/.claude/skills/design-generation/SKILL.md",
+      "lifetime": "baked",
+      "storageKey": null,
+      "purpose": "the contract every step of the build must satisfy"
+    },
+    {
+      "path": "/home/user/brain/DESIGN.md",
+      "lifetime": "kit",
+      "storageKey": "bk-emplifi-2026/DESIGN.md",
+      "purpose": "the brand — outranks everything, including the request",
+      "digest": "e351c776451994ac5bb35ea5ddbdb6d0c74303824266124645ace601043aa8e6"
+    },
+    {
+      "path": "/home/user/brain/README.md",
+      "lifetime": "kit",
+      "storageKey": "bk-emplifi-2026/README.md",
+      "purpose": "what each file is, and its authority",
+      "digest": "9ba94cd23e5270cc6f909e3d195e3e135c2b35d38bc09af2266ae512f04c9e98"
+    },
+    {
+      "path": "/home/user/brain/brand/asset_manifest.json",
+      "lifetime": "kit",
+      "storageKey": "bk-emplifi-2026/brand/asset_manifest.json",
+      "purpose": "staged assets, already filtered to this kit",
+      "digest": "5d6c4e29fd490c43b426ddf35abd48c809baebc3e72c422c0c2a87587c774a6d"
+    },
+    {
+      "path": "/home/user/brain/brand/emplifi-logo.svg",
+      "lifetime": "kit",
+      "storageKey": "bk-emplifi-2026/brand/emplifi-logo.svg",
+      "purpose": "logo",
+      "digest": "28802bc0a88c4559affc88d7fdcadd06876618c42c75adcf85adc289583762ea"
+    },
+    {
+      "path": "/home/user/brain/brand/emplifi-logo-white.svg",
+      "lifetime": "kit",
+      "storageKey": "bk-emplifi-2026/brand/emplifi-logo-white.svg",
+      "purpose": "logo_reverse — For placement on the navy ground and on photography.",
+      "digest": "c7742d03dc6be02d7a6e626f47db836663f10c701e3babebfd92c97212d96923"
+    },
+    {
+      "path": "/home/user/brain/brand/emplifi-mark.svg",
+      "lifetime": "kit",
+      "storageKey": "bk-emplifi-2026/brand/emplifi-mark.svg",
+      "purpose": "logo_mark",
+      "digest": "6fde9d4b69cfa4123a31b759d0662022b10eadead1be5a95fa69668d4cc758b8"
+    },
+    {
+      "path": "/home/user/brain/fonts/inter_400_normal.ttf",
+      "lifetime": "kit",
+      "storageKey": "bk-emplifi-2026/fonts/inter_400_normal.ttf",
+      "purpose": "inter 400",
+      "digest": "1b08e7fc267a5c7e1d614100f604b83e7e8a0be241f0f288faa2b3ac93a683ba"
+    },
+    {
+      "path": "/home/user/brain/fonts/inter_500_normal.ttf",
+      "lifetime": "kit",
+      "storageKey": "bk-emplifi-2026/fonts/inter_500_normal.ttf",
+      "purpose": "inter 500",
+      "digest": "8c883f63b2c4157d997319f2c8bc6995ed4357ef371940d31ca159004a4aae63"
+    },
+    {
+      "path": "/home/user/brain/fonts/inter_600_normal.ttf",
+      "lifetime": "kit",
+      "storageKey": "bk-emplifi-2026/fonts/inter_600_normal.ttf",
+      "purpose": "inter 600",
+      "digest": "e7a1aaf7eda9f2fad4131725fa556265ec75ca7b2d756260173a040363e8d4f7"
+    },
+    {
+      "path": "/home/user/brain/fonts/inter_700_normal.ttf",
+      "lifetime": "kit",
+      "storageKey": "bk-emplifi-2026/fonts/inter_700_normal.ttf",
+      "purpose": "inter 700",
+      "digest": "b37284b5701b6b168dfc770aa1a4ac492106422fd3ba76bc7641e37434e8019c"
+    }
+  ],
+  "context": {
+    "conversation": [],
+    "resolved": {
+      "palette": {
+        "primary": "#0C3B5D",
+        "secondary": "#6765FE",
+        "accent": "#FF5A21",
+        "surface": "#FFFFFF",
+        "ink": "#111113",
+        "muted": "#94A9B8"
+      },
+      "type_scale": {
+        "h1": "48px",
+        "h2": "32px",
+        "h3": "22px",
+        "body": "16px",
+        "caption": "13px"
+      },
+      "heading_family": "inter",
+      "body_family": "inter",
+      "heading_substituted": false,
+      "heading_note": null,
+      "contested": [],
+      "ground_switch_point": {
+        "value": 0.179,
+        "source": "no threshold stated by the kit; computed crossover"
+      }
+    },
+    "known_findings": [
+      {
+        "code": "asset-foreign-kit",
+        "severity": "review",
+        "detail": "brand/partner-lockup.svg is tagged bk-kahua-2026 but sits in the brain for bk-emplifi-2026 — quarantined, and never offered to this kit"
+      },
+      {
+        "code": "token-cache-conflict",
+        "severity": "review",
+        "detail": "palette.secondary: cache says #5B5BD6, DESIGN.md says #6765FE — DESIGN.md wins"
+      },
+      {
+        "code": "token-cache-conflict",
+        "severity": "review",
+        "detail": "type_scale.h1: cache says 56px, DESIGN.md says 48px — DESIGN.md wins"
+      },
+      {
+        "code": "token-cache-conflict",
+        "severity": "review",
+        "detail": "radii [\"16px\"] does not include DESIGN.md's 12px — DESIGN.md wins"
+      }
+    ],
+    "parent": null
+  },
+  "withheld": [
+    {
+      "path": "brand/tokens.json",
+      "reason": "a cache with no authority that disagrees with DESIGN.md and is newer than it; withheld so nothing in the box can resolve a brand value from it"
+    }
+  ],
+  "outputs": {
+    "root": "/home/user/work",
+    "save_with": "save_work",
+    "checkpoint_every_seconds": 60,
+    "expected_tree": [
+      "html_square/index.html",
+      "html_square/assets/plate.png",
+      "renders/square.png",
+      "html_landscape/index.html",
+      "html_landscape/assets/plate.png",
+      "renders/landscape.png",
+      "RESULT.json"
+    ]
+  },
+  "egress": [
+    "api.openai.com — image generation and the agent model",
+    "<project>.supabase.co — brain reads and work writes, scoped by the run token"
+  ],
+  "limits": {
+    "sandbox_timeout_seconds": 1200,
+    "image_quality": "low",
+    "max_image_calls": 4
+  }
+}
