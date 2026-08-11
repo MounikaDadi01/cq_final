@@ -27,3 +27,13 @@ build/
 
 # Extracted source packet — the zips are committed, the extraction is not
 /packet/
+
+# Downloaded CA bundle, not ours to redistribute
+.certs/
+
+# Staged build context for E2B templates, regenerated on every build
+sandbox/.staged/
+sandbox/toolkit
+web/.launch-logs/
+web/.staging-kits/
+.staging-kits/
