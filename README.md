@@ -8,6 +8,13 @@ hydrated in different orders at different times.** Every event here is the same 
 clean box spins up, the right files go in, an agent gets a prompt, the agent works, **the
 agent saves its own work**, the box dies.
 
+Three tiers of file, separated by how long each lives. What is the same every run — the
+skill, the toolkit, `save_work` — is baked into the image. What is the same for one
+customer — the brand — is pulled fresh from storage on every launch, so no box ever knows
+which brand it serves and a rebrand needs no rebuild. What lives for one job — the
+request, its copy, its comments — is derived from Postgres into `hydration.json` at launch
+and never replayed. Inputs arrive by tier; output is one tree, mirrored out by the agent.
+
 - `ROADMAP.md` — the architecture and the argument for each choice.
 - `DECISIONS.md` — what was built, what was stubbed, and the claims I trust least. Start
   here if you only read one.
@@ -23,7 +30,9 @@ agent saves its own work**, the box dies.
 | `campaigns/` | Request payloads used for local runs. |
 | `image_testing_v2/` | Gate 0 — the skill run locally for both brands, before anything touched a sandbox. |
 | `results/` | Interleaved concurrent runs: per-tenant hydration, the renders each one saved, and the launcher logs. |
-| `TRANSCRIPT*.txt` | Raw agent transcripts, untidied. |
+| `new customers/` | Brand kits for onboarding through the UI, including ones that are meant to fail. |
+| `transcripts/` | Every agent session, rendered. |
+| `TRANSCRIPT*.txt` | The main session, untidied — the summary and the complete record. |
 
 ## Running it
 
@@ -36,12 +45,16 @@ npm install --prefix web
 npm install --prefix sandbox
 
 npm run build --prefix sandbox     # builds both E2B templates and writes a build stamp
-npm run dev --prefix web           # http://localhost:3000
+npm run dev --prefix web           # http://localhost:3100
 ```
 
 The launchers refuse to start a box when the build stamp disagrees with source, so if you
 edit an agent or a skill, rebuild. `npx tsx sandbox/check-stamp.ts` answers "do I need
 to?" without spending a build.
+
+Freshness is tracked **per template**, so editing the deploy agent does not block a
+generation run — each launcher asks only about the image it is starting. Rebuild one with
+`npm run build:deployment --prefix sandbox` rather than both.
 
 ## Verifying it
 
