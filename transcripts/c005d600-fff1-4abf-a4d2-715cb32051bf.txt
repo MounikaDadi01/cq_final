@@ -1,0 +1,434 @@
+WORKING TRANSCRIPT — CharacterQuilt design engine trial
+
+Session          c005d600-fff1-4abf-a4d2-715cb32051bf.jsonl
+Rendered         2026-08-11 17:14:18 PDT
+Covers           2026-08-10 13:13:43 → 2026-08-10 13:16:44 (PDT)
+Human turns      2
+Assistant turns  0
+Tool calls       7
+
+Tool use by kind:
+     5  Read
+     1  Grep
+     1  Bash
+
+Notes on this rendering:
+  · Credentials are redacted — API keys, JWTs, connection strings, and any
+    .env value whose key name looks secret. Everything else is verbatim.
+  · Tool output is clipped to 1200 characters per result. Re-run
+    with --full for the complete record.
+  · Re-run `node scripts/transcript.mjs` to pick up everything since.
+
+==============================================================================
+
+==============================================================================
+USER  [2026-08-10 13:13:43]  turn 1
+==============================================================================
+Review this change for security vulnerabilities.
+
+Changed files (you may Read these and any other file in the repo):
+  - eval/src/brain.ts
+  - eval/src/checks.ts
+  - eval/src/ingest.ts
+  - eval/src/png.ts
+  - eval/tests/checks.test.ts
+  - eval/tests/silent-cases.test.ts
+
+Unified diff (only + lines are new):
+
+=== DIFF: eval/src/brain.ts ===
+@@ -41,6 +41,19 @@ export interface Brain {
+   fonts: FontFile[]
+   assets: BrandAsset[]
+   designDoc: string
++
++  /**
++   * Input we could not turn into machine-readable values.
++   *
++   * These exist so nothing is dropped silently. A brand naming its colours in
++   * Pantone, or shipping `Family-Regular.ttf` instead of `family_400_normal.ttf`,
++   * is not broken — it is just not comparable by software. The files still
++   * hydrate in full and the agent still reads `DESIGN.md`; what changes is that
++   * checks depending on these values report *unverifiable* rather than passing
++   * for the wrong reason.
++   */
++  unparsedFonts: string[]
++  unparsedPalette: Record<string, string>
+ }
+ 
+ /** #abc and #AABBCC both normalise to #AABBCC. */
+@@ -113,18 +126,24 @@ export function loadBrain(dir: string): Brain {
+ 
+   const rawPalette = readSection(designDoc, 'Palette')
+   const palette: Record<string, string> = {}
++  const unparsedPalette: Record<string, string> = {}
+   for (const [k, v] of Object.entries(rawPalette)) {
+     const hex = normaliseHex(v)
+     if (hex) palette[k] = hex
++    else unparsedPalette[k] = v
+   }
+ 
+   const fontsDir = join(dir, 'fonts')
+-  const fonts: FontFile[] = existsSync(fontsDir)
+-    ? readdirSync(fontsDir)
+-        .filter((f) => /\.(ttf|otf|woff2?)$/i.test(f))
+-        .map((f) => parseFontFile(f, fontsDir))
+-        .filter((f): f is FontFile => f !== null)
++  const fontFiles = existsSync(fontsDir)
++    ? readdirSync(fontsDir).filter((f) => /\.(ttf|otf|woff2?)$/i.test(f))
+     : []
++  const fonts: FontFile[] = []
++  const unparsedFonts: string[] = []
++  for (const file of fontFiles) {
++    const parsed = parseFontFile(file, fontsDir)
++    if (parsed) fonts.push(parsed)
++    else unparsedFonts.push(file)
++  }
+ 
+   const manifestPath = join(dir, 'brand', 'asset_manifest.json')
+   let kitId = ''
+@@ -157,9 +176,105 @@ export function loadBrain(dir: string): Brain {
+     fonts,
+     assets,
+     designDoc,
++    unparsedFonts,
++    unparsedPalette,
++  }
++}
++
++/** True when the palette cannot be compared by software at all. */
++export function paletteIsMachineReadable(brain: Brain): boolean {
++  return Object.keys(brain.palette).length > 0
++}
++
++/** True when some palette entries resisted parsing, so absence proves nothing. */
++export function paletteIsPartial(brain: Brain): boolean {
++  return Object.keys(brain.unparsedPalette).length > 0
++}
++
++export interface ScaleResolution {
++  key: string
++  value: string
++  source: 'prose' | 'table'
++  /** True when the document asserts two different values for the same key. */
++  contested: boolean
++  detail?: string
++}
++
++/**
++ * Resolves a type-scale value when `DESIGN.md` contradicts itself.
++ *
++ * The precedence is SKILL.md's, not ours: the prose under *Applying it* is "as
++ * binding as the numbers above them", and a statement scoped to every canvas is
++ * more specific than a table entry. Where the prose asserts a value for a key
++ * the table also states, the prose governs.
++ *
++ * Ties break deterministically on document order, so the same brain always
++ * resolves the same way and a run is reproducible. Which value wins matters far
++ * less than the resolution being recorded and repeatable.
++ */
++export function resolveScaleValue(brain: Brain, key: string): ScaleResolution | null {
++  const tableValue = brain.typeScale[key.toLowerCase()]
++  const proseValues = proseAssertionsFor(brain, key)
++
++  if (proseValues.length === 0) {
++    if (tableValue === undefined) return null
++    return { key, value: tableValue, source: 'table', contested: false }
++  }
++
++  // First occurrence in document order is the deterministic winner.
++  const prose = proseValues[0]
++  const contested = tableValue !== undefined && tableValue !== prose
++  return {
++    key,
++    value: prose,
++    source: 'prose',
++    contested,
++    detail: contested
++      ? `table says ${tableValue}, prose says ${prose}; prose governs and is more specific`
++      : undefined,
+   }
+ }
+ 
++/**
++ * Finds values the prose asserts for a scale key, in document order.
++ *
++ * Narrow by design: it looks for the key followed shortly by a pixel value. It
++ * is only ever used to *report* a contradiction and to break a tie the same way
++ * twice — the agent is what actually interprets the brand.
++ */
++function proseAssertionsFor(brain: Brain, key: string): string[] {
++  const applying = sectionBody(brain.designDoc, 'Applying it')
++  if (!applying) return []
++  const pattern = new RegExp(`\\b${key.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')}\\b[^.]{0,40}?(\\d+)\\s*px`, 'gi')
++  const out: string[] = []
++  for (const match of applying.matchAll(pattern)) out.push(`${match[1]}px`)
++  return out
++}
++
++/** Raw text of a `## Heading` section, up to the next heading. */
++export function sectionBody(markdown: string, heading: string): string | null {
++  const lines = markdown.split(/\r?\n/)
++  const body: string[] = []
++  let inside = false
++  for (const line of lines) {
++    const h = /^##\s+(.*)$/.exec(line)
++    if (h) {
++      if (inside) break
++      inside = h[1].trim().toLowerCase() === heading.trim().toLowerCase()
++      continue
++    }
++    if (inside) body.push(line)
++  }
++  return inside || body.length > 0 ? body.join('\n') : null
++}
++
++/** Every scale key whose value the document states twice, differently. */
++export function selfContradictions(brain: Brain): ScaleResolution[] {
++  return Object.keys(brain.typeScale)
++    .map((key) => resolveScaleValue(brain, key))
++    .filter((r): r is ScaleResolution => r !== null && r.contested)
++}
++
+ /** Every immediate subdirectory holding a DESIGN.md is a brain. */
+ export function discove
+    … [27148 more characters omitted]
+    → Read: /Users/mounikadadi/Downloads/characterquilt-work-trial/eval/src/brain.ts
+    RESULT: 1	import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
+    2	import { basename, join } from 'node:path'
+    3	
+    4	/**
+    5	 * Loads a brain directory generically.
+    6	 *
+    7	 * Note the division of labour, because it looks like a contradiction otherwise:
+    8	 * the *backend* never parses `DESIGN.md` — it ships the file and the agent
+    9	 * interprets it. The *evaluation layer* does parse it, because a test needs
+    10	 * ground truth to assert against. Neither one contains a brand name.
+    11	 */
+    12	
+    13	export interface FontFile {
+    14	  file: string
+    15	  path: string
+    16	  familySlug: string
+    17	  weight: number
+    18	  style: string
+    19	}
+    20	
+    21	export interface BrandAsset {
+    22	  kind: string
+    23	  path: string
+    24	  kitId: string
+    25	  absolutePath: string
+    26	  exists: boolean
+    27	  /** Intrinsic size read from the SVG header, when declared. */
+    28	  naturalWidth?: number
+    29	  naturalHeight?: number
+    30	}
+    31	
+    32	export interface Brain {
+    33	  dir: string
+    34	  /** Directory name. Used to discover tenant names without hardcoding any. */
+    35	  slug: string
+    36	  kitId: string
+    37	  palette: Record<string, string>
+    38	  type: Record<string, string>
+    39	  typeScale: Record<string, string>
+    40	  shape: Record<
+        … [11717 more characters omitted]
+    → Read: /Users/mounikadadi/Downloads/characterquilt-work-trial/eval/src/checks.ts
+    RESULT: 1	import type { Brain } from './brain'
+    2	import { normaliseHex, paletteIsPartial, resolveFamily, slugify } from './brain'
+    3	import type { Box, Raster } from './png'
+    4	import { colourCoverage, contrastRatio, dominantColour } from './png'
+    5	
+    6	/**
+    7	 * Checks operate on a normalised bundle rather than driving a browser, so they
+    8	 * are unit-testable today and can point at real renders later without changing.
+    9	 *
+    10	 * Only checks with exact answers live here. Whether an ad is any *good* has no
+    11	 * exact answer and belongs to the model looking at the render — software that
+    12	 * grades brand conformance passes work a person would reject.
+    13	 */
+    14	
+    15	export type Role = 'text' | 'logo' | 'cta'
+    16	
+    17	export interface OverlayElement {
+    18	  role: Role
+    19	  box: Box
+    20	  text?: string
+    21	  /** Resolved family name as the renderer computed it. */
+    22	  fontFamily?: string
+    23	  /** Colours the element declares: fill, text, border. */
+    24	  declaredColours?: string[]
+    25	  /** The colour expected to dominate the element's box, when it has one. */
+    26	  expectedDominantColour?: string
+    27	  /** For logos: path relative to the brain directory. */
+    28	  assetPath?: string
+    29	  renderedWidth?: nu
+        … [16763 more characters omitted]
+    → Read: /Users/mounikadadi/Downloads/characterquilt-work-trial/eval/src/ingest.ts
+    RESULT: 1	import { createHash } from 'node:crypto'
+    2	import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
+    3	import { join, posix, relative, sep } from 'node:path'
+    4	import {
+    5	  declaredFamilies,
+    6	  loadBrain,
+    7	  normaliseHex,
+    8	  resolveFamily,
+    9	  selfContradictions,
+    10	} from './brain'
+    11	
+    12	/**
+    13	 * Plans the ingest of a brain directory: what to upload, what rows to write, and
+    14	 * what is wrong with the input.
+    15	 *
+    16	 * A pure function on purpose. It touches no bucket and no database, so it is
+    17	 * testable before either exists and the backend's job reduces to executing the
+    18	 * plan. Nothing here names a customer: identity comes from the manifest, and a
+    19	 * brand nobody has seen plans identically.
+    20	 *
+    21	 * Findings are produced once, here, rather than rediscovered by every run.
+    22	 */
+    23	
+    24	export type Severity = 'info' | 'review' | 'blocked'
+    25	
+    26	export interface IngestFinding {
+    27	  code: string
+    28	  severity: Severity
+    29	  detail: string
+    30	}
+    31	
+    32	export interface IngestObject {
+    33	  /** Where it lands: <kitId>/<path within the brain>. */
+    34	  storageKey: string
+    35	  sourcePath: string
+    36	  sha256: string
+    37	  bytes: number
+    38	}
+    39	
+    40	expor
+        … [12354 more characters omitted]
+    → Read: /Users/mounikadadi/Downloads/characterquilt-work-trial/eval/src/png.ts
+    RESULT: 1	import { readFileSync, writeFileSync } from 'node:fs'
+    2	import { PNG } from 'pngjs'
+    3	
+    4	export interface Box {
+    5	  x: number
+    6	  y: number
+    7	  width: number
+    8	  height: number
+    9	}
+    10	
+    11	export interface Raster {
+    12	  width: number
+    13	  height: number
+    14	  /** RGBA, 4 bytes per pixel. */
+    15	  data: Buffer
+    16	}
+    17	
+    18	export function readPng(path: string): Raster {
+    19	  const png = PNG.sync.read(readFileSync(path))
+    20	  return { width: png.width, height: png.height, data: png.data }
+    21	}
+    22	
+    23	export interface SyntheticRect extends Box {
+    24	  color: string
+    25	}
+    26	
+    27	/**
+    28	 * Builds a PNG in memory. Used to make fixtures for the checks' own tests, so
+    29	 * every check can be shown catching a planted violation without needing a
+    30	 * browser or an image model.
+    31	 */
+    32	export function makePng(
+    33	  width: number,
+    34	  height: number,
+    35	  background: string,
+    36	  rects: SyntheticRect[] = [],
+    37	): Raster {
+    38	  const png = new PNG({ width, height })
+    39	  const bg = hexToRgb(background)
+    40	  for (let i = 0; i < png.data.length; i += 4) {
+    41	    png.data[i] = bg.r
+    42	    png.data[i + 1] = bg.g
+    43	    png.data[i + 2] = bg.b
+    44	    png.data[i + 3] = 255
+    45	  }
+    46	  for (const rect
+        … [4900 more characters omitted]
+    → Grep: \.ok\b|failures\(|unverified\(
+    RESULT: eval/src/ingest.ts:396:  return !plan.ok || plan.findings.some((f) => f.severity === 'blocked')
+    eval/README.md:50:`failures()` returns only real failures. `unverified()` surfaces the gaps, so
+    eval/src/capability.ts:119:      if (!isRequestable(w, h, env).ok) continue
+    eval/tests/ingest.test.ts:115:    expect(plan.ok).toBe(true)
+    eval/tests/ingest.test.ts:199:    expect(plan.ok).toBe(true)
+    eval/tests/ingest.test.ts:254:    expect(plan.ok).toBe(true)
+    eval/tests/capability.test.ts:7:    expect(isRequestable(1024, 1024, GPT_IMAGE_2).ok).toBe(true)
+    eval/tests/capability.test.ts:12:    expect(result.ok).toBe(false)
+    eval/tests/capability.test.ts:18:    expect(result.ok).toBe(false)
+    eval/tests/capability.test.ts:24:    expect(result.ok).toBe(false)
+    eval/tests/capability.test.ts:30:    expect(result.ok).toBe(false)
+    eval/tests/capability.test.ts:45:      expect(isRequestable(canvas.width, canvas.height, GPT_IMAGE_2).ok).toBe(false)
+    eval/tests/capability.test.ts:52:    if (!plan.ok) {
+    eval/tests/capability.test.ts:60:    expect(isRequestable(plan.generateWidth, plan.generateHeight, GPT_IMAGE_2).ok).toBe(true)
+    eval/tests/capability.test.ts:73:    expect(plan.ok).toBe(false)
+    eval/tests/capability
+        … [2826 more characters omitted]
+    → Bash: Inspect exact bytes of regex line
+    RESULT: 0000000            c   o   n   s   t       p   a   t   t   e   r   n    
+    0000020    =       n   e   w       R   e   g   E   x   p   (   `   \   \
+    0000040    b   $   {   k   e   y   .   r   e   p   l   a   c   e   (   /
+    0000060    [   .   *   +   ?   ^   $   {   }   (   )   |   [   \   \   ]
+    0000100    \   \   \   \   ]   /   g   ,       '   \   \   \   \   $   &
+    0000120    '   )   }   \   \   b   [   ^   .   ]   {   0   ,   4   0   }
+    0000140    ?   (   \   \   d   +   )   \   \   s   *   p   x   `   ,    
+    0000160    '   g   i   '   )  \n                                        
+    0000166
+    → Read: /Users/mounikadadi/Downloads/characterquilt-work-trial/eval/tests/checks.test.ts
+    RESULT: 1	import { describe, expect, it } from 'vitest'
+    2	import {
+    3	  checkAssetIntegrity,
+    4	  checkCanvasDimensions,
+    5	  checkFontProvenance,
+    6	  checkInBounds,
+    7	  checkNoOverlap,
+    8	  checkPaletteConformance,
+    9	  checkPixelFidelity,
+    10	  checkPlateGeometry,
+    11	  checkRequiredStrings,
+    12	  checkRoles,
+    13	  failures,
+    14	  runAllChecks,
+    15	} from '../src/checks'
+    16	import { makePng } from '../src/png'
+    17	import {
+    18	  brains,
+    19	  buildFixture,
+    20	  canvasesFromPacket,
+    21	  clone,
+    22	  foreignAssetOf,
+    23	  groundOf,
+    24	  missingAssetOf,
+    25	} from './fixtures'
+    26	import { GPT_IMAGE_2, planGeneration } from '../src/capability'
+    27	
+    28	const all = brains()
+    29	/** Only canvases the model can actually serve produce a renderable fixture. */
+    30	const servable = canvasesFromPacket().filter(
+    31	  (c) => planGeneration(c.width, c.height, GPT_IMAGE_2).ok,
+    32	)
+    33	
+    34	const cases = all.flatMap((brain) => servable.map((canvas) => ({ brain, canvas })))
+    35	
+    36	describe('a compliant render passes every check, for every brain and canvas', () => {
+    37	  it('has cases to run', () => {
+    38	    expect(cases.length).toBeGreaterThan(0)
+    39	  })
+    40	
+    41	  it.each(cases)('$brain.slug $canvas.name', ({ brain, canvas }) 
+        … [8558 more characters omitted]
+
+==============================================================================
+USER  [2026-08-10 13:16:44]  turn 2
+==============================================================================
+[Request interrupted by user]

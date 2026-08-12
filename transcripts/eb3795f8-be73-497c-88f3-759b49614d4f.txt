@@ -1,0 +1,315 @@
+WORKING TRANSCRIPT — CharacterQuilt design engine trial
+
+Session          eb3795f8-be73-497c-88f3-759b49614d4f.jsonl
+Rendered         2026-08-11 17:14:19 PDT
+Covers           2026-08-11 15:21:41 → 2026-08-11 15:25:46 (PDT)
+Human turns      2
+Assistant turns  2
+Tool calls       5
+
+Tool use by kind:
+     3  Read
+     1  Bash
+     1  Glob
+
+Notes on this rendering:
+  · Credentials are redacted — API keys, JWTs, connection strings, and any
+    .env value whose key name looks secret. Everything else is verbatim.
+  · Tool output is clipped to 1200 characters per result. Re-run
+    with --full for the complete record.
+  · Re-run `node scripts/transcript.mjs` to pick up everything since.
+
+==============================================================================
+
+==============================================================================
+USER  [2026-08-11 15:21:41]  turn 1
+==============================================================================
+Review this change for security vulnerabilities.
+
+Changed files (you may Read these and any other file in the repo):
+  - web/app/api/request/route.ts
+  - web/app/api/session/route.ts
+  - web/app/api/customer/route.ts
+  - web/app/api/deploy/route.ts
+  - web/app/api/status/route.ts
+  - web/app/api/kit/route.ts
+  - web/app/api/comments/route.ts
+  - web/app/api/run/route.ts
+  - web/app/api/logs/route.ts
+  - web/app/review/review-client.tsx
+  - supabase/migrations/0011_break_policy_recursion.sql
+  - eval/tests/session-token.test.ts
+  - web/app/deploy/deploy-client.tsx
+  - web/app/intake/intake-client.tsx
+  - web/app/review/page.tsx
+  - web/app/customers/customers-client.tsx
+  - web/lib/client.ts
+  - supabase/migrations/0010_app_user.sql
+  - supabase/migrations/0001_schema.sql
+  - supabase/migrations/0002_rls.sql
+  - supabase/migrations/0009_comments.sql
+  - supabase/migrations/0006_deploy_role.sql
+  - supabase/migrations/0014_deployments.sql
+  - supabase/migrations/0003_storage.sql
+  - supabase/migrations/0005_run_role.sql
+  - supabase/migrations/0004_assertions.sql
+  - supabase/migrations/0008_role_and_claim_must_agree.sql
+  - supabase/migrations/0016_deploy_fields_and_result.sql
+  - supabase/migrations/0017_artifact_image_facts.sql
+  - supabase/migrations/0013_kit_owner_can_replace.sql
+
+Unified diff (only + lines are new):
+
+=== DIFF: web/app/api/request/route.ts ===
+@@ -0,0 +1,116 @@
++import { cookies } from 'next/headers'
++import { startLauncher, verifyUserToken } from '@/lib/server'
++
++/**
++ * Create a request and start the first run.
++ *
++ * The request row is written with the *session* token, so a customer can only create
++ * work against a kit it owns — the policy enforces it rather than this handler. Only
++ * the launch needs the backend, because `app_user` deliberately cannot insert a run.
++ */
++export async function POST(request: Request) {
++  const store = await cookies()
++  const token = store.get('cq_session')?.value
++  const claims = token ? verifyUserToken(token) : null
++  if (!claims) return Response.json({ error: 'not signed in' }, { status: 401 })
++
++  const body = (await request.json()) as {
++    kit_id?: string
++    campaign_name?: string
++    headline?: string
++    subhead?: string
++    eybrow?: string
++    eyebrow?: string
++    cta?: string
++    plate_direction?: string
++    canvases?: string[]
++    inspirations?: string[]
++  }
++
++  const name = (body.campaign_name ?? '').trim()
++  const headline = (body.headline ?? '').trim()
++  if (!name || !headline) {
++    return Response.json({ error: 'a campaign name and a headline are required' }, { status: 400 })
++  }
++  if (!body.kit_id || !/^[A-Za-z0-9._-]{1,64}$/.test(body.kit_id)) {
++    return Response.json({ error: 'kit_id is not a valid id' }, { status: 400 })
++  }
++
++  const { env } = await import('@/lib/server')
++  const { SUPABASE_URL, SUPABASE_ANON_KEY } = env()
++  const headers = {
++    apikey: SUPABASE_ANON_KEY,
++    Authorization: `Bearer ${token}`,
++    'Content-Type': 'application/json',
++    Prefer: 'return=representation',
++  }
++
++  // The four sizes the brief names. `producible` is decided by the launcher against
++  // the model's envelope, so an impossible size is recorded rather than dropped.
++  const ALL = [
++    { name: 'square', width: 1080, height: 1080 },
++    { name: 'landscape', width: 1200, height: 628 },
++    { name: 'portrait', width: 1080, height: 1350 },
++    { name: 'leaderboard', width: 728, height: 90 },
++  ]
++  const wanted = ALL.filter((c) => (body.canvases ?? ['square', 'landscape', 'portrait']).includes(c.name))
++  if (wanted.length === 0) return Response.json({ error: 'pick at least one size' }, { status: 400 })
++
++  const created = await fetch(`${SUPABASE_URL}/rest/v1/requests`, {
++    method: 'POST',
++    headers,
++    body: JSON.stringify({
++      kit_id: body.kit_id,
++      kind: 'new',
++      campaign_name: name,
++      copy: {
++        eyebrow: body.eyebrow ?? null,
++        headline,
++        subhead: body.subhead ?? null,
++        cta: body.cta ?? 'Learn more',
++        legal: null,
++      },
++      plate_direction: body.plate_direction ?? null,
++      inspirations: body.inspirations ?? [],
++      created_by: 'ui',
++    }),
++  })
++  if (!created.ok) {
++    return Response.json({ error: `could not create the request: ${await created.text()}` }, { status: 400 })
++  }
++  const [row] = (await created.json()) as { id: string }[]
++
++  await fetch(`${SUPABASE_URL}/rest/v1/request_canvases`, {
++    method: 'POST',
++    headers,
++    body: JSON.stringify(wanted.map((c) => ({ request_id: row.id, ...c }))),
++  })
++
++  const [revision] = (await (
++    await fetch(`${SUPABASE_URL}/rest/v1/revisions`, {
++      method: 'POST',
++      headers,
++      body: JSON.stringify({ request_id: row.id, n: 1, status: 'draft' }),
++    })
++  ).json()) as { id: string }[]
++
++  // Waited on briefly so a refusal reaches the browser instead of vanishing.
++  const started = await startLauncher(
++    ['tsx', 'scripts/launch-run.ts', '--revision', revision.id, '--mode', 'revise', '--quality', 'high'],
++    revision.id,
++  )
++  if (!started.ok) {
++    return Response.json(
++      {
++        error: `the request was created but the run could not start: ${started.error}`,
++        request_id: row.id,
++        revision_id: revision.id,
++      },
++      { status: 500 },
++    )
++  }
++
++  return Response.json({ ok: true, request_id: row.id, revision_id: revision.id })
++}
++
++export const dynamic = 'force-dynamic'
+
+
+=== DIFF: web/app/api/session/route.ts ===
+@@ -0,0 +1,55 @@
++import { cookies } from 'next/headers'
++import { env, mintUserToken, SESSION_SECONDS, serviceFetch } from '@/lib/server'
++
++/**
++ * Sign in as a customer.
++ *
++ * DEV STAND-IN, and worth being blunt about: there is no password here. Real auth
++ * would be Supabase Auth with `customer_id` read from the signed-in user's profile
++ * and put into the token by an access-token hook.
++ *
++ * What is NOT a stand-in is the isolation. The token this route mints car
+    … [231874 more characters omitted]
+    → Bash: Find TypeScript files in the repository
+    RESULT: /Users/mounikadadi/Downloads/characterquilt-work-trial/web/app/api/comments/route.ts
+    /Users/mounikadadi/Downloads/characterquilt-work-trial/web/app/api/deploy/route.ts
+    /Users/mounikadadi/Downloads/characterquilt-work-trial/web/app/api/kit/route.ts
+    /Users/mounikadadi/Downloads/characterquilt-work-trial/web/app/api/status/route.ts
+    /Users/mounikadadi/Downloads/characterquilt-work-trial/web/app/api/logs/route.ts
+    /Users/mounikadadi/Downloads/characterquilt-work-trial/web/app/api/request/route.ts
+    /Users/mounikadadi/Downloads/characterquilt-work-trial/web/app/api/run/route.ts
+    /Users/mounikadadi/Downloads/characterquilt-work-trial/web/app/api/customer/route.ts
+    /Users/mounikadadi/Downloads/characterquilt-work-trial/web/app/api/session/route.ts
+    /Users/mounikadadi/Downloads/characterquilt-work-trial/web/node_modules/styled-jsx/macro.d.ts
+    /Users/mounikadadi/Downloads/characterquilt-work-trial/web/node_modules/styled-jsx/style.d.ts
+    /Users/mounikadadi/Downloads/characterquilt-work-trial/web/node_modules/styled-jsx/global.d.ts
+    /Users/mounikadadi/Downloads/characterquilt-work-trial/web/node_modules/styled-jsx/css.d.ts
+    /Users/mounikadadi/Downloads/characterquilt-work-trial/web/node_modules/styled-j
+        … [1704 more characters omitted]
+    → Glob: web/lib/*.ts
+    RESULT: web/lib/client.ts
+    web/lib/<env-secret-redacted>-options.ts
+    web/lib/server.ts
+    web/lib/read.ts
+    → Read: /Users/mounikadadi/Downloads/characterquilt-work-trial/web/lib/server.ts
+    RESULT: 1	import { createHmac, timingSafeEqual } from 'node:crypto'
+    2	import { readFileSync } from 'node:fs'
+    3	import { join } from 'node:path'
+    4	
+    5	/**
+    6	 * Server-only helpers. Nothing here may be imported from a client component.
+    7	 *
+    8	 * The division is the point of this file. Two secrets live on this side and must
+    9	 * never cross to the browser:
+    10	 *
+    11	 *   SUPABASE_JWT_SECRET       mints sessions
+    12	 *   SUPABASE_SERVICE_ROLE_KEY bypasses RLS entirely
+    13	 *
+    14	 * The browser gets one thing: a short-lived `app_user` token carrying a customer id.
+    15	 * Everything it can then read or write is decided by database policy, not by the
+    16	 * code in `app/`. That ordering is deliberate — a mistake in a React component
+    17	 * returns zero rows instead of another customer's work.
+    18	 */
+    19	
+    20	const REPO_ROOT = join(process.cwd(), '..')
+    21	
+    22	let cached: Record<string, string> | null = null
+    23	
+    24	export function env(): Record<string, string> {
+    25	  if (cached) return cached
+    26	  let fromFile: Record<string, string> = {}
+    27	  try {
+    28	    fromFile = Object.fromEntries(
+    29	      readFileSync(join(REPO_ROOT, '.env'), 'utf8')
+    30	        .split(/\r?\n/)
+    31	        .filter((l) => l.trim() && !l.
+        … [8711 more characters omitted]
+    → Read: /Users/mounikadadi/Downloads/characterquilt-work-trial/web/lib/read.ts
+    RESULT: 1	import { cookies } from 'next/headers'
+    2	import { env } from './server'
+    3	
+    4	/**
+    5	 * Server-side reads, using the browser's own session token.
+    6	 *
+    7	 * Not `service_role`. This is the point worth being careful about: it would be
+    8	 * easier to read everything privileged on the server and filter in JSX, and that is
+    9	 * precisely how a tenant boundary becomes a rendering bug. Using the session token
+    10	 * means the database applies the same policies it would for a direct call, so a
+    11	 * mistake here returns an empty list rather than someone else's work.
+    12	 */
+    13	export async function session(): Promise<{ token: string; customerId: string } | null> {
+    14	  const store = await cookies()
+    15	  const token = store.get('cq_session')?.value
+    16	  const customerId = store.get('cq_customer')?.value
+    17	  if (!token || !customerId) return null
+    18	  return { token, customerId }
+    19	}
+    20	
+    21	export async function read<T>(token: string, path: string): Promise<T> {
+    22	  const { SUPABASE_URL, SUPABASE_ANON_KEY } = env()
+    23	  const response = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+    24	    headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${token}` },
+    25	    cache: 'no-store',
+    
+        … [4246 more characters omitted]
+
+--- ASSISTANT [2026-08-11 15:24:54] ---
+Looking at the diff, I've read the changed files and the supporting server library. Let me trace the critical paths carefully.
+    → Read: /Users/mounikadadi/Downloads/characterquilt-work-trial/web/app/api/customer/route.ts
+    RESULT: 1	import { spawn } from 'node:child_process' // cq-allow-disqualifier-scan: spawns the ingest worker, never an agent
+    2	import { mkdirSync, openSync, writeFileSync, rmSync } from 'node:fs'
+    3	import { join } from 'node:path'
+    4	import { serviceFetch } from '@/lib/server'
+    5	
+    6	/**
+    7	 * Create a customer and its first brand kit, then ingest the files dropped in.
+    8	 *
+    9	 * This is the one route that creates a *tenant*, so it is the one route where the
+    10	 * tenancy rules have to be established rather than enforced by them. Three guards:
+    11	 *
+    12	 *   1. A new customer id must not already exist. Creating a kit under an id somebody
+    13	 *      else owns is the whole failure mode, and it is an equality check.
+    14	 *   2. A kit id must not already exist either, for the same reason.
+    15	 *   3. Ids are pattern-checked before they reach a path or a storage prefix.
+    16	 *
+    17	 * Ingest runs as a detached backend job because it holds `service_role` and writes
+    18	 * brand rows — neither of which a person may do.
+    19	 */
+    20	const ID = /^[a-z0-9][a-z0-9-]{1,48}$/
+    21	
+    22	export async function POST(request: Request) {
+    23	  /**
+    24	   * No session is required, and that is a deliberate narrowing of what this 
+        … [1559 more characters omitted]
+
+--- ASSISTANT [2026-08-11 15:25:16] ---
+Based on my review, I've identified the key security concerns. The RLS design is well-thought-out, and the sandbox role separation is solid. The main concerns cluster around the unauthenticated onboarding routes.
+
+==============================================================================
+USER  [2026-08-11 15:25:46]  turn 2
+==============================================================================
+[Request interrupted by user]

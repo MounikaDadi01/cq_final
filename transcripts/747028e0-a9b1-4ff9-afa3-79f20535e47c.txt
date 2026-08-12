@@ -1,0 +1,168 @@
+WORKING TRANSCRIPT — CharacterQuilt design engine trial
+
+Session          747028e0-a9b1-4ff9-afa3-79f20535e47c.jsonl
+Rendered         2026-08-11 17:14:18 PDT
+Covers           2026-08-11 15:21:25 → 2026-08-11 15:24:28 (PDT)
+Human turns      2
+Assistant turns  0
+Tool calls       0
+
+Tool use by kind:
+
+Notes on this rendering:
+  · Credentials are redacted — API keys, JWTs, connection strings, and any
+    .env value whose key name looks secret. Everything else is verbatim.
+  · Tool output is clipped to 1200 characters per result. Re-run
+    with --full for the complete record.
+  · Re-run `node scripts/transcript.mjs` to pick up everything since.
+
+==============================================================================
+
+==============================================================================
+USER  [2026-08-11 15:21:25]  turn 1
+==============================================================================
+Review this change for security vulnerabilities.
+
+Changed files (you may Read these and any other file in the repo):
+  - supabase/migrations/0011_break_policy_recursion.sql
+  - supabase/migrations/0010_app_user.sql
+  - supabase/migrations/0001_schema.sql
+  - supabase/migrations/0002_rls.sql
+  - supabase/migrations/0009_comments.sql
+  - supabase/migrations/0006_deploy_role.sql
+  - supabase/migrations/0014_deployments.sql
+  - supabase/migrations/0003_storage.sql
+  - supabase/migrations/0005_run_role.sql
+  - supabase/migrations/0004_assertions.sql
+  - supabase/migrations/0008_role_and_claim_must_agree.sql
+  - supabase/migrations/0016_deploy_fields_and_result.sql
+  - supabase/migrations/0017_artifact_image_facts.sql
+  - supabase/migrations/0013_kit_owner_can_replace.sql
+  - supabase/migrations/0007_run_cannot_record.sql
+  - supabase/migrations/0012_approval.sql
+  - supabase/migrations/0015_deploy_target_fields.sql
+  - sandbox/package-lock.json
+  - sandbox/agent.deploy.ts
+  - sandbox/agent.generate.ts
+  - sandbox/save_work.mjs
+  - sandbox/build.ts
+  - sandbox/check-stamp.ts
+  - sandbox/transcript.ts
+  - sandbox/template.generation.ts
+  - sandbox/template.deployment.ts
+  - sandbox/smoke.ts
+  - sandbox/.build-stamp.json
+  - sandbox/package.json
+  - sandbox/diag.ts
+
+Unified diff (only + lines are new):
+
+=== DIFF: supabase/migrations/0011_break_policy_recursion.sql ===
+@@ -0,0 +1,215 @@
++-- 0011 · break the policy recursion
++--
++-- Found by a test, and it would have been found by the first UI query otherwise:
++--
++--   error: infinite recursion detected in policy for relation "requests"
++--
++-- The cause is structural rather than a typo. A policy on `revisions` subqueried
++-- `requests`; a policy on `requests` subqueried `revisions`. Each subquery is itself
++-- filtered by the other table's policies, so the two policies call each other and
++-- Postgres stops the cycle by refusing the whole query.
++--
++-- It only appeared once BOTH the sandbox policies and the human policies existed,
++-- because a cycle needs two directions. That is worth noting: neither migration was
++-- wrong on its own, and testing them separately would have found nothing.
++--
++-- The fix is to stop policies from reading policed tables. Every cross-table lookup
++-- moves into a `security definer` function, which resolves the tenancy question once,
++-- outside RLS, and returns ids. Policies then compare against a list instead of
++-- running a policed query — no cycle is possible because no policy reads a table
++-- that has policies.
++--
++-- These functions are the tenancy boundary now, so they are deliberately small,
++-- read-only, and return nothing but ids.
++
++-- ---------------------------------------------------------------------------
++-- Resolvers
++-- ---------------------------------------------------------------------------
++
++/** The request behind the run's revision. */
++create or replace function app.run_request() returns uuid
++language sql stable security definer set search_path = public as $$
++  select request_id from revisions where id = app.run_revision();
++$$;
++
++/** Threads on the run's request. */
++create or replace function app.run_threads() returns setof uuid
++language sql stable security definer set search_path = public as $$
++  select id from comment_threads where request_id = app.run_request();
++$$;
++
++/** Every request belonging to the session customer. */
++create or replace function app.user_requests() returns setof uuid
++language sql stable security definer set search_path = public as $$
++  select q.id
++    from requests q
++    join brand_kits k on k.id = q.kit_id
++   where k.customer_id = app.user_customer();
++$$;
++
++/** Every revision belonging to the session customer. */
++create or replace function app.user_revisions() returns setof uuid
++language sql stable security definer set search_path = public as $$
++  select r.id
++    from revisions r
++    join requests q on q.id = r.request_id
++    join brand_kits k on k.id = q.kit_id
++   where k.customer_id = app.user_customer();
++$$;
++
++/** Every comment thread belonging to the session customer. */
++create or replace function app.user_threads() returns setof uuid
++language sql stable security definer set search_path = public as $$
++  select t.id
++    from comment_threads t
++    join requests q on q.id = t.request_id
++    join brand_kits k on k.id = q.kit_id
++   where k.customer_id = app.user_customer();
++$$;
++
++grant execute on function app.run_request() to sandbox_run, sandbox_deploy;
++grant execute on function app.run_threads() to sandbox_run;
++grant execute on function app.user_requests() to app_user;
++grant execute on function app.user_revisions() to app_user;
++grant execute on function app.user_threads() to app_user;
++
++comment on function app.user_requests() is
++  'Tenancy boundary. security definer so a policy never has to read a policed table, '
++  'which is what created a recursive cycle between requests and revisions.';
++
++-- ---------------------------------------------------------------------------
++-- Sandbox run policies, rewritten against the resolvers
++-- ---------------------------------------------------------------------------
++
++drop policy requests_run_select on requests;
++create policy requests_run_select on requests
++  for select using (app.is_run() and id = app.run_request());
++
++drop policy request_canvases_run_select on request_canvases;
++create policy request_canvases_run_select on request_canvases
++  for select using (app.is_run() and request_id = app.run_request());
++
++drop policy comment_threads_run_select on comment_threads;
++create policy comment_threads_run_select on comment_threads
++  for select using (app.is_run() and request_id = app.run_request());
++
++drop policy comment_messages_run_select on comment_messages;
++create policy comment_messages_run_select on comment_messages
++  for select using (app.is_run() and thread_id in (select app.run_threads()));
++
++drop policy comment_messages_run_insert on comment_messages;
++creat
+    … [284373 more characters omitted]
+
+==============================================================================
+USER  [2026-08-11 15:24:28]  turn 2
+==============================================================================
+[Request interrupted by user]

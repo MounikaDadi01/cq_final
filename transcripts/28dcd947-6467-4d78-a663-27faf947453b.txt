@@ -1,0 +1,347 @@
+WORKING TRANSCRIPT — CharacterQuilt design engine trial
+
+Session          28dcd947-6467-4d78-a663-27faf947453b.jsonl
+Rendered         2026-08-11 17:14:18 PDT
+Covers           2026-08-10 13:24:24 → 2026-08-10 13:25:11 (PDT)
+Human turns      1
+Assistant turns  1
+Tool calls       4
+
+Tool use by kind:
+     3  Read
+     1  StructuredOutput
+
+Notes on this rendering:
+  · Credentials are redacted — API keys, JWTs, connection strings, and any
+    .env value whose key name looks secret. Everything else is verbatim.
+  · Tool output is clipped to 1200 characters per result. Re-run
+    with --full for the complete record.
+  · Re-run `node scripts/transcript.mjs` to pick up everything since.
+
+==============================================================================
+
+==============================================================================
+USER  [2026-08-10 13:24:24]  turn 1
+==============================================================================
+Review this change for security vulnerabilities.
+
+Changed files (you may Read these and any other file in the repo):
+  - eval/src/brain.ts
+  - eval/src/checks.ts
+  - eval/src/png.ts
+  - eval/tests/logo-ground.test.ts
+
+Unified diff (only + lines are new):
+
+=== DIFF: eval/src/brain.ts ===
+@@ -345,3 +345,78 @@ export function resolveFamily(brain: Brain, requested: string): FamilyResolution
+ export function declaredFamilies(brain: Brain): string[] {
+   return [...new Set(Object.values(brain.type))]
+ }
++
++/**
++ * Which asset kind to reach for, by how dark the ground is.
++ *
++ * Policy as data, not code — in production this is a row, so a brand shipping a
++ * kind nobody anticipated needs no edit here. On a dark ground the list stops at
++ * two entries on purpose: if neither a reverse mark nor a symbol exists, the
++ * answer is to omit and escalate, never to place a wordmark that will not read.
++ */
++export interface LogoPreference {
++  dark: string[]
++  light: string[]
++}
++
++export const DEFAULT_LOGO_PREFERENCE: LogoPreference = {
++  dark: ['logo_reverse', 'logo_mark'],
++  light: ['logo', 'logo_mark'],
++}
++
++/**
++ * The luminance below which white type outreads black type. The crossover is
++ * exact, which is why software is allowed to compute it.
++ */
++export const DARK_GROUND_LUMINANCE = 0.179
++
++export interface LogoChoice {
++  asset: BrandAsset | null
++  kind: string | null
++  groundIsDark: boolean
++  reason: string
++}
++
++/**
++ * Chooses a logo for the ground it will sit on, using only this kit's own
++ * staged assets that resolve to a file.
++ *
++ * No brand is named. In this packet one brand takes the reverse-logo branch and
++ * the other takes the symbol branch, from the same sentence — which is the shape
++ * of answer a third brand needs.
++ */
++export function chooseLogo(
++  brain: Brain,
++  groundLuminance: number,
++  preference: LogoPreference = DEFAULT_LOGO_PREFERENCE,
++): LogoChoice {
++  const groundIsDark = groundLuminance < DARK_GROUND_LUMINANCE
++  const order = groundIsDark ? preference.dark : preference.light
++
++  const usable = (kind: string) =>
++    brain.assets.find((a) => a.kind === kind && a.kitId === brain.kitId && a.exists)
++
++  for (const kind of order) {
++    const asset = usable(kind)
++    if (asset) {
++      return {
++        asset,
++        kind,
++        groundIsDark,
++        reason: `ground luminance ${groundLuminance.toFixed(3)} is ${
++          groundIsDark ? 'dark' : 'light'
++        }; "${kind}" is the first usable kind in ${order.join(' → ')}`,
++      }
++    }
++  }
++
++  return {
++    asset: null,
++    kind: null,
++    groundIsDark,
++    reason:
++      `ground luminance ${groundLuminance.toFixed(3)} is ${groundIsDark ? 'dark' : 'light'} ` +
++      `but this kit stages none of ${order.join(', ')} — omit the logo and escalate rather ` +
++      'than placing one that will not read, and never typeset a substitute',
++  }
++}
+
+
+=== DIFF: eval/src/checks.ts ===
+@@ -1,7 +1,7 @@
+ import type { Brain } from './brain'
+-import { normaliseHex, paletteIsPartial, resolveFamily, slugify } from './brain'
++import { chooseLogo, normaliseHex, paletteIsPartial, resolveFamily, slugify } from './brain'
+ import type { Box, Raster } from './png'
+-import { colourCoverage, contrastRatio, dominantColour } from './png'
++import { colourCoverage, contrastRatio, dominantColour, luminanceAt } from './png'
+ 
+ /**
+  * Checks operate on a normalised bundle rather than driving a browser, so they
+@@ -206,6 +206,52 @@ export function checkPaletteConformance(bundle: ArtifactBundle, brain: Brain): F
+   return out
+ }
+ 
++export interface LogoGroundAssessment {
++  assetPath: string
++  groundLuminance: number
++  groundIsDark: boolean
++  /** The kind actually placed, resolved from the manifest. */
++  placedKind: string | null
++  /** The kind the preference order would reach for on this ground. */
++  recommendedKind: string | null
++  matchesRecommendation: boolean
++  reason: string
++}
++
++/**
++ * Measures the ground under each placed logo and reports what the preference
++ * order would have chosen.
++ *
++ * A measurement, not a check. Whether a logo survives its ground is SKILL.md's
++ * question for a person looking at the render — software supplies the exact
++ * number and the recommendation, and stops there. A wordmark deliberately placed
++ * on a light corner of a dark plate is correct, and no threshold could tell that
++ * apart from a mistake.
++ */
++export function assessLogoGround(
++  bundle: ArtifactBundle,
++  brain: Brain,
++  raster: Raster,
++): LogoGroundAssessment[] {
++  const out: LogoGroundAssessment[] = []
++  for (const el of bundle.overlay) {
++    if (el.role !== 'logo' || !el.assetPath) continue
++    const placed = brain.assets.find((a) => a.path === el.assetPath)
++    const groundLuminance = luminanceAt(raster, el.box)
++    const choice = chooseLogo(brain, groundLuminance)
++    out.push({
++      assetPath: el.assetPath,
++      groundLuminance: Math.round(groundLuminance * 1000) / 1000,
++      groundIsDark: choice.groundIsDark,
++      placedKind: placed?.kind ?? null,
++      recommendedKind: choice.kind,
++      matchesRecommendation: placed?.kind === choice.kind,
++      reason: choice.reason,
++    })
++  }
++  return out
++}
++
+ export interface ContrastMeasurement {
+   role: Role
+   declaredColour: string
+
+
+=== DIFF: eval/src/png.ts ===
+@@ -152,6 +152,11 @@ export function colourCoverage(
+   return total === 0 ? 0 : hits / total
+ }
+ 
++/** Relative luminance of the dominant colour in a region. */
++export function luminanceAt(raster: Raster, box: Box): number {
++  return relativeLuminance(dominantColour(raster, box))
++}
++
+ /** The most common colour in a region, quantised to reduce noise. */
+ export function dominantColour(raster: Raster, box: Box, bucket = 8): string {
+   const b = clampBox(raster, box)
+
+
+=== DIFF: eval/tests/logo-ground.test.ts ===
+@@ -0,0 +1,216 @@
++import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join } from 'nod
+    … [8442 more characters omitted]
+    → Read: /Users/mounikadadi/Downloads/characterquilt-work-trial/eval/src/brain.ts
+    RESULT: 1	import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
+    2	import { basename, join } from 'node:path'
+    3	
+    4	/**
+    5	 * Loads a brain directory generically.
+    6	 *
+    7	 * Note the division of labour, because it looks like a contradiction otherwise:
+    8	 * the *backend* never parses `DESIGN.md` — it ships the file and the agent
+    9	 * interprets it. The *evaluation layer* does parse it, because a test needs
+    10	 * ground truth to assert against. Neither one contains a brand name.
+    11	 */
+    12	
+    13	export interface FontFile {
+    14	  file: string
+    15	  path: string
+    16	  familySlug: string
+    17	  weight: number
+    18	  style: string
+    19	}
+    20	
+    21	export interface BrandAsset {
+    22	  kind: string
+    23	  path: string
+    24	  kitId: string
+    25	  absolutePath: string
+    26	  exists: boolean
+    27	  /** Intrinsic size read from the SVG header, when declared. */
+    28	  naturalWidth?: number
+    29	  naturalHeight?: number
+    30	}
+    31	
+    32	export interface Brain {
+    33	  dir: string
+    34	  /** Directory name. Used to discover tenant names without hardcoding any. */
+    35	  slug: string
+    36	  kitId: string
+    37	  palette: Record<string, string>
+    38	  type: Record<string, string>
+    39	  typeScale: Record<string, string>
+    40	  shape: Record<
+        … [14339 more characters omitted]
+    → Read: /Users/mounikadadi/Downloads/characterquilt-work-trial/eval/src/png.ts
+    RESULT: 1	import { readFileSync, writeFileSync } from 'node:fs'
+    2	import { PNG } from 'pngjs'
+    3	
+    4	export interface Box {
+    5	  x: number
+    6	  y: number
+    7	  width: number
+    8	  height: number
+    9	}
+    10	
+    11	export interface Raster {
+    12	  width: number
+    13	  height: number
+    14	  /** RGBA, 4 bytes per pixel. */
+    15	  data: Buffer
+    16	}
+    17	
+    18	export function readPng(path: string): Raster {
+    19	  const png = PNG.sync.read(readFileSync(path))
+    20	  return { width: png.width, height: png.height, data: png.data }
+    21	}
+    22	
+    23	export interface SyntheticRect extends Box {
+    24	  color: string
+    25	}
+    26	
+    27	/**
+    28	 * Builds a PNG in memory. Used to make fixtures for the checks' own tests, so
+    29	 * every check can be shown catching a planted violation without needing a
+    30	 * browser or an image model.
+    31	 */
+    32	export function makePng(
+    33	  width: number,
+    34	  height: number,
+    35	  background: string,
+    36	  rects: SyntheticRect[] = [],
+    37	): Raster {
+    38	  const png = new PNG({ width, height })
+    39	  const bg = hexToRgb(background)
+    40	  for (let i = 0; i < png.data.length; i += 4) {
+    41	    png.data[i] = bg.r
+    42	    png.data[i + 1] = bg.g
+    43	    png.data[i + 2] = bg.b
+    44	    png.data[i + 3] = 255
+    45	  }
+    46	  for (const rect
+        … [5105 more characters omitted]
+    → Read: /Users/mounikadadi/Downloads/characterquilt-work-trial/eval/src/checks.ts
+    RESULT: 1	import type { Brain } from './brain'
+    2	import { chooseLogo, normaliseHex, paletteIsPartial, resolveFamily, slugify } from './brain'
+    3	import type { Box, Raster } from './png'
+    4	import { colourCoverage, contrastRatio, dominantColour, luminanceAt } from './png'
+    5	
+    6	/**
+    7	 * Checks operate on a normalised bundle rather than driving a browser, so they
+    8	 * are unit-testable today and can point at real renders later without changing.
+    9	 *
+    10	 * Only checks with exact answers live here. Whether an ad is any *good* has no
+    11	 * exact answer and belongs to the model looking at the render — software that
+    12	 * grades brand conformance passes work a person would reject.
+    13	 */
+    14	
+    15	export type Role = 'text' | 'logo' | 'cta'
+    16	
+    17	export interface OverlayElement {
+    18	  role: Role
+    19	  box: Box
+    20	  text?: string
+    21	  /** Resolved family name as the renderer computed it. */
+    22	  fontFamily?: string
+    23	  /** Colours the element declares: fill, text, border. */
+    24	  declaredColours?: string[]
+    25	  /** The colour expected to dominate the element's box, when it has one. */
+    26	  expectedDominantColour?: string
+    27	  /** For logos: path relative to the brain directory. */
+    28	  assetPath?: strin
+        … [18570 more characters omitted]
+
+--- ASSISTANT [2026-08-10 13:25:11] ---
+Looking at this change, I've read all four touched files in full. Let me assess:
+
+**Nature of the change**: An offline evaluation harness that reads local files (DESIGN.md, asset manifests, PNGs) and reports measurements. No HTTP handlers, no shell/exec, no SQL, no HTML rendering, no auth boundaries, no network egress, no deserialization of attacker input.
+
+**New surfaces**:
+1. `chooseLogo(brain, groundLuminance, preference)` — pure function over already-loaded `Brain` state. Correctly enforces `a.kitId === brain.kitId` when selecting an asset (this is the one place cross-tenant leakage could matter, and it IS gated).
+2. `assessLogoGround(bundle, brain, raster)` — reads `bundle.overlay[]`, calls `luminanceAt` (which routes through `clampBox` → bounded) and `chooseLogo`. It looks up `placed` by `path` without a kit-id check, but that's for a *report field* (`placedKind`), not for allowing an asset — the actual cross-tenant asset-leak enforcement lives in `checkAssetIntegrity` which was not weakened by this change.
+3. `luminanceAt` — thin wrapper over `dominantColour` + `relativeLuminance`; input is a raster and a box that gets clamped.
+4. Test file — writes only to `mkdtempSync(tmpdir())` and cleans up via `rmSync` in `afterAll`.
+
+**Checked for**:
+- Cross-tenant asset selection: gated in `chooseLogo` via `kitId` equality.
+- Path traversal via `assetPath`: `assessLogoGround` only uses it for a `.find()` string comparison and returns it in a report; no `fs.open`/exec on it.
+- Fail-open on NaN luminance: `groundLuminance < DARK_GROUND_LUMINANCE` yields `false` on NaN → picks the "light" branch. This is a report, not an authorization decision, so no security impact.
+- Sibling-gate parity: `checkAssetIntegrity` retains its kit-mismatch fail; the new function's laxer `find` is a peer report only.
+- Resource caps: `clampBox` bounds all iteration to raster dimensions.
+- Test tmpdir handling: mkdtemp + recursive rm inside `afterAll`. No symlink races exploited by an attacker (test-only).
+
+No source→sink path with a security impact is introduced by this diff.
+    → StructuredOutput: {"findings":[]}
+    RESULT: Structured output provided successfully

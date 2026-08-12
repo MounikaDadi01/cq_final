@@ -1,0 +1,285 @@
+WORKING TRANSCRIPT — CharacterQuilt design engine trial
+
+Session          d2d6736e-9389-4ee3-9ebd-ca595fe0fe91.jsonl
+Rendered         2026-08-11 17:14:19 PDT
+Covers           2026-08-10 15:19:05 → 2026-08-10 15:19:57 (PDT)
+Human turns      1
+Assistant turns  1
+Tool calls       5
+
+Tool use by kind:
+     2  Read
+     2  Grep
+     1  StructuredOutput
+
+Notes on this rendering:
+  · Credentials are redacted — API keys, JWTs, connection strings, and any
+    .env value whose key name looks secret. Everything else is verbatim.
+  · Tool output is clipped to 1200 characters per result. Re-run
+    with --full for the complete record.
+  · Re-run `node scripts/transcript.mjs` to pick up everything since.
+
+==============================================================================
+
+==============================================================================
+USER  [2026-08-10 15:19:05]  turn 1
+==============================================================================
+Review this change for security vulnerabilities.
+
+Changed files (you may Read these and any other file in the repo):
+  - campaigns/emplifi-shoppable-video.json
+  - campaigns/kahua-federal-edit.json
+  - campaigns/lirr-east-side-access.json
+  - eval/src/campaign.ts
+  - eval/tests/campaign.test.ts
+
+Unified diff (only + lines are new):
+
+=== DIFF: campaigns/emplifi-shoppable-video.json ===
+@@ -0,0 +1,22 @@
++{
++  "id": "emplifi-shoppable-video",
++  "brand_kit_id": "bk-emplifi-2026",
++  "campaign": "2026 Social Commerce Predictions",
++  "kind": "new",
++  "canvases": [
++    { "name": "square",    "width": 1080, "height": 1080 },
++    { "name": "landscape", "width": 1200, "height": 628  },
++    { "name": "portrait",  "width": 1080, "height": 1350 }
++  ],
++  "copy": {
++    "eyebrow": "2026 Predictions",
++    "headline": "Shoppable video becomes the default discovery surface",
++    "subhead": "TikTok Shop now hosts 500,000+ US sellers. Your feed is a storefront.",
++    "cta": "Get the predictions",
++    "cta_href": "https://emplifi.example/predictions-2026",
++    "legal": null
++  },
++  "plate_direction": "Deep navy ground. A real product surface or phone UI held in frame in the lower half, framed by periwinkle geometric shapes — circles, an arc, a thin connecting line. High contrast, generous whitespace above for copy. Prefer real interface over abstract illustration.",
++  "inspirations": ["emplifi-predictions-square.png"],
++  "notes": "Made up for local testing, reusing the packet's own copy so the output can be compared against their real inspiration."
++}
+
+
+=== DIFF: campaigns/kahua-federal-edit.json ===
+@@ -0,0 +1,26 @@
++{
++  "id": "kahua-federal-edit",
++  "brand_kit_id": "bk-kahua-2026",
++  "campaign": "Federal Portfolio ABM",
++  "kind": "edit",
++  "of_campaign": "lirr-east-side-access",
++  "of_revision": 1,
++  "canvases": [
++    { "name": "portrait", "width": 1080, "height": 1350 }
++  ],
++  "copy": {
++    "eyebrow": "Case Study",
++    "headline": "$50B+ in federal assets managed on Kahua",
++    "subhead": "GSA standardized on Kahua for its national portfolio.",
++    "cta": "See the federal brief",
++    "cta_href": "https://kahua.example/federal-brief",
++    "legal": null
++  },
++  "plate_direction": "Same photo direction as the parent. Quieten the upper area behind the headline.",
++  "inspirations": [],
++  "messages": [
++    "This is unreadable where it sits. The sky behind it is doing too much.",
++    "Wrong colour, and it should read as the only thing to click."
++  ],
++  "notes": "Made up for local testing of the edit path. Mirrors the packet's edit request so the parent-plate reuse and message hydration can both be exercised."
++}
+
+
+=== DIFF: campaigns/lirr-east-side-access.json ===
+@@ -0,0 +1,23 @@
++{
++  "id": "lirr-east-side-access",
++  "brand_kit_id": "bk-kahua-2026",
++  "campaign": "LIRR East Side Access",
++  "kind": "new",
++  "canvases": [
++    { "name": "square",      "width": 1080, "height": 1080 },
++    { "name": "landscape",   "width": 1200, "height": 628  },
++    { "name": "portrait",    "width": 1080, "height": 1350 },
++    { "name": "leaderboard", "width": 728,  "height": 90   }
++  ],
++  "copy": {
++    "eyebrow": "Case Study",
++    "headline": "$11B of tunnel work, one system of record",
++    "subhead": "The MTA standardized capital program delivery on Kahua.",
++    "cta": "Read the case study",
++    "cta_href": "https://kahua.example/lirr-case-study",
++    "legal": null
++  },
++  "plate_direction": "Deep tunnel under construction beneath a rail terminal at dawn. Wet concrete, steel ribs, work lighting raking along the bore. Cool blue-grey ground with generous quiet negative space in the upper third for copy. Jobsite-real, never stock-office. No gradients, no abstract illustration.",
++  "inspirations": [],
++  "notes": "Made up for local testing. Kahua is construction project management, so an infrastructure programme is on-brand."
++}
+
+
+=== DIFF: eval/src/campaign.ts ===
+@@ -0,0 +1,215 @@
++import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
++import { join } from 'node:path'
++import type { Brain } from './brain'
++import { GPT_IMAGE_2, planGeneration, type Envelope } from './capability'
++
++/**
++ * Campaigns are made up, and they live in `campaigns/` as JSON.
++ *
++ * **Local test fixtures only.** Nothing in that directory is product data and
++ * nothing in it ships. In the running system a campaign arrives from an operator
++ * through the composer and lands in Postgres; these files stand in for that while
++ * the composer does not exist.
++ *
++ * The brief says to invent them — *"Make the campaign up — the Long Island
++ * Railroad, whatever."* So a campaign file is a local stand-in for what an
++ * operator submits, and validating one before a run starts is the cheapest place
++ * to catch a mistake: an unresolvable kit or a misspelled inspiration filename
++ * would otherwise be discovered after paying for a plate.
++ *
++ * The shape is ours. The packet's example payloads are explicitly *"not a
++ * schema"*, so this resembles them only where resembling them is useful.
++ */
++
++export interface CampaignCanvas {
++  name: string
++  width: number
++  height: number
++}
++
++export interface CampaignCopy {
++  eyebrow?: string | null
++  headline: string
++  subhead?: string | null
++  cta: string
++  cta_href?: string | null
++  legal?: string | null
++}
++
++export interface Campaign {
++  id: string
++  brandKitId: string
++  campaign: string
++  kind: 'new' | 'edit'
++  canvases: CampaignCanvas[]
++  copy: CampaignCopy
++  /** The human's intent for the imagery. Becomes the seed of the plate prompt. */
++  plateDirection?: string
++  /** Exact filenames from the inspirations directory. Empty means none attached. */
++  inspirations: string[]
++  /** Operator feedback, on an edit. */
++  messages?: string[]
++  ofCampaign?: string
++  ofRevision?: number
++  notes?: string
++  sourcePath: string
++}
++
++export interface CampaignIssue {
++  field: string
++  severity: 'blocked' | 'review'
++  detail: stri
+    … [12955 more characters omitted]
+    → Read: /Users/mounikadadi/Downloads/characterquilt-work-trial/eval/src/campaign.ts
+    → Read: /Users/mounikadadi/Downloads/characterquilt-work-trial/eval/tests/campaign.test.ts
+    RESULT: 1	import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+    2	import { tmpdir } from 'node:os'
+    3	import { dirname, join, resolve } from 'node:path'
+    4	import { fileURLToPath } from 'node:url'
+    5	import { afterAll, describe, expect, it } from 'vitest'
+    6	import {
+    7	  availableInspirations,
+    8	  blockers,
+    9	  discoverCampaigns,
+    10	  findings,
+    11	  loadCampaign,
+    12	  validateCampaign,
+    13	} from '../src/campaign'
+    14	import { brains, PACKET } from './fixtures'
+    15	
+    16	/**
+    17	 * Campaigns are invented, so the only way they earn trust is by being validated
+    18	 * before a run spends anything. Every blocked case below would otherwise have
+    19	 * been discovered after paying for a plate.
+    20	 */
+    21	
+    22	const here = dirname(fileURLToPath(import.meta.url))
+    23	const CAMPAIGNS = resolve(here, '..', '..', 'campaigns')
+    24	const INSPIRATIONS = PACKET
+    25	
+    26	const all = brains()
+    27	const campaigns = discoverCampaigns(CAMPAIGNS)
+    28	const temporaries: string[] = []
+    29	afterAll(() => {
+    30	  for (const d of temporaries) rmSync(d, { recursive: true, force: true })
+    31	})
+    32	
+    33	function writeCampaign(patch: Record<string, unknown>): string {
+    34	  const dir = mkdtempSync(join(tmpdir(), 'cq-campaign-'))
+    35	  te
+        … [6730 more characters omitted]
+    RESULT: 1	import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
+    2	import { join } from 'node:path'
+    3	import type { Brain } from './brain'
+    4	import { GPT_IMAGE_2, planGeneration, type Envelope } from './capability'
+    5	
+    6	/**
+    7	 * Campaigns are made up, and they live in `campaigns/` as JSON.
+    8	 *
+    9	 * **Local test fixtures only.** Nothing in that directory is product data and
+    10	 * nothing in it ships. In the running system a campaign arrives from an operator
+    11	 * through the composer and lands in Postgres; these files stand in for that while
+    12	 * the composer does not exist.
+    13	 *
+    14	 * The brief says to invent them — *"Make the campaign up — the Long Island
+    15	 * Railroad, whatever."* So a campaign file is a local stand-in for what an
+    16	 * operator submits, and validating one before a run starts is the cheapest place
+    17	 * to catch a mistake: an unresolvable kit or a misspelled inspiration filename
+    18	 * would otherwise be discovered after paying for a plate.
+    19	 *
+    20	 * The shape is ours. The packet's example payloads are explicitly *"not a
+    21	 * schema"*, so this resembles them only where resembling them is useful.
+    22	 */
+    23	
+    24	export interface CampaignCanvas {
+    25	
+        … [6806 more characters omitted]
+    → Grep: loadCampaign|discoverCampaigns|availableInspirations|validateCampaign
+    RESULT: Found 2 files
+    eval/src/campaign.ts
+    eval/tests/campaign.test.ts
+    → Grep: plateDirection|plate_direction|campaign.copy|cta_href
+    RESULT: Found 6 files
+    eval/src/campaign.ts
+    campaigns/README.md
+    eval/tests/campaign.test.ts
+    campaigns/kahua-federal-edit.json
+    campaigns/emplifi-shoppable-video.json
+    campaigns/lirr-east-side-access.json
+
+--- ASSISTANT [2026-08-10 15:19:57] ---
+I've read both new source files in full and grepped for consumers of every exported symbol. Here's what I found:
+
+**Surface area of the change**
+- Three campaign JSON fixture files (data only, no code).
+- `eval/src/campaign.ts` — pure validation utility: loads JSON, walks a directory to list image basenames, and returns a list of `{field, severity, detail}` issues.
+- `eval/tests/campaign.test.ts` — vitest tests that write fixtures to `mkdtempSync` temp dirs and clean up.
+
+**Consumers of the new API**
+Grepping `loadCampaign|discoverCampaigns|availableInspirations|validateCampaign` and `plateDirection|plate_direction|campaign.copy|cta_href` shows the only importers are the test file and the campaign JSONs themselves. The validated campaign fields do not yet reach any sink in the repo — no LLM prompt, no HTML renderer, no fetch of `cta_href`, no shell/SQL, no filesystem write keyed on user data.
+
+**Sinks I checked and cleared**
+- `readFileSync(path, 'utf8')` in `loadCampaign` — `path` comes from `discoverCampaigns(join(dir, f))` where `f` is filtered by `.endsWith('.json')` from a fixed campaigns dir, or from tests that construct their own temp path. Not attacker-influenced.
+- `walk()` in `availableInspirations` uses `statSync` (follows symlinks), so a symlink cycle under an attacker-writable inspirations root would cause unbounded recursion. But the root is a repo-relative constant (`PACKET`) reached only from tests; no external caller supplies it.
+- `JSON.parse` on fixture files — no prototype pollution vector because `raw.*` values are read as own properties and no target object is merge-assigned; and Node's `JSON.parse` places `__proto__` as an own property rather than mutating the prototype.
+- The duplicate-canvas gate (`seen.has(...)` before `seen.add`) is ordered correctly.
+- No `+` line introduces a logging/telemetry sink for sensitive data; `plate_direction` and `messages` echo back into `detail` strings, but only the validator's own return value — not a log, span, or external egress.
+- `mkdtempSync`/`rmSync(recursive:true,force:true)` in tests operate on paths returned by `mkdtempSync` itself, so no path-traversal / arbitrary-delete concern.
+
+**Regression / sibling-parity / IPC / policy-gate patterns** — none applicable; no existing security controls are touched, no auth surface, no cross-principal boundary.
+
+I have no concrete source→sink→impact to name in this change.
+    → StructuredOutput: {"findings":[]}
+    RESULT: Structured output provided successfully
