@@ -90,10 +90,3 @@ npm run test:live  --prefix eval   # makes a real gpt-image-2 call
 npm run verify     --prefix eval   # end-to-end product check; writes rows and objects
 ```
 
-## The disqualifiers
-
-`eval/tests/disqualifiers.test.ts` scans the repository for each of the brief's
-disqualifiers that has an exact answer, and every scanner is fed a planted violation so a
-green run means it looked rather than that it found nothing. It asserts a floor on the
-number of files read, because an earlier version pointed at directories that did not
-exist and passed by scanning zero of them.
