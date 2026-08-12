@@ -21,7 +21,8 @@ agent saves its own work**, the box dies.
 | `sandbox/` | The two E2B templates and the two agents that run inside them. |
 | `supabase/` | Schema, row-level security, roles. Isolation lives here. |
 | `campaigns/` | Request payloads used for local runs. |
-| `image_testing/`, `results/` | Output the system produced. |
+| `image_testing_v2/` | Gate 0 — the skill run locally for both brands, before anything touched a sandbox. |
+| `results/` | Interleaved concurrent runs: per-tenant hydration, the renders each one saved, and the launcher logs. |
 | `TRANSCRIPT*.txt` | Raw agent transcripts, untidied. |
 
 ## Running it
